@@ -1,21 +1,14 @@
 let lastContextMouse = { x: 0, y: 0 };
-document.addEventListener(
-  "contextmenu",
-  (e) => {
-    lastContextMouse = { x: e.clientX, y: e.clientY };
-  },
-  true
-);
 
 // --- helpers ---
-function getCurrentRange() {
+const getCurrentRange = () => {
   const sel = window.getSelection?.();
   if (!sel || sel.rangeCount === 0) return null;
   return sel.getRangeAt(0);
-}
+};
 
 // Insert into input/textarea by saved coordinates
-function insertIntoInputBySavedSelection(info, text) {
+const insertIntoInputBySavedSelection = (info, text) => {
   const el = info?.element;
   if (!el || el.disabled || el.readOnly) return false;
   el.focus({ preventScroll: true });
@@ -28,10 +21,10 @@ function insertIntoInputBySavedSelection(info, text) {
   el.setSelectionRange(caret, caret);
   el.dispatchEvent(new Event("input", { bubbles: true }));
   return true;
-}
+};
 
 // Insert into contentEditable by saved Range
-function insertIntoContentEditableBySavedRange(info, text) {
+const insertIntoContentEditableBySavedRange = (info, text) => {
   const el = info?.element;
   const saved = info?.range;
   if (!el || !el.isContentEditable || !saved) return false;
@@ -57,10 +50,10 @@ function insertIntoContentEditableBySavedRange(info, text) {
   after.collapse(true);
   sel.addRange(after);
   return true;
-}
+};
 
 // Insert into arbitrary document Range
-function insertIntoDocumentRange(info, text) {
+const insertIntoDocumentRange = (info, text) => {
   const saved = info?.range;
   if (!saved) return false;
   const sel = window.getSelection();
@@ -70,14 +63,14 @@ function insertIntoDocumentRange(info, text) {
   range.deleteContents();
   range.insertNode(document.createTextNode(text));
   return true;
-}
+};
 
-function removePopup() {
+const removePopup = () => {
   document.getElementById("corrector-popup")?.remove();
-}
+};
 
 // --- main ---
-function createPopup(initialText) {
+const createPopup = (initialText) => {
   removePopup();
 
   const div = document.createElement("div");
@@ -95,8 +88,6 @@ function createPopup(initialText) {
     <div class="result" style="display:none;"></div>
     <div class="actions">
       <button data-action="apply" disabled>Apply</button>
-      <button data-action="copy"  disabled>Copy</button>
-      <button data-action="close">Close</button>
     </div>
   `;
 
@@ -108,11 +99,6 @@ function createPopup(initialText) {
   });
 
   document.body.appendChild(div);
-
-  // 🔒 DON'T GIVE FOCUS to popup: keep input field active
-  div.addEventListener("mousedown", (e) => {
-    e.preventDefault(); // blocks focus transfer to button
-  });
 
   let mode = "polish";
   let style = "formal";
@@ -154,11 +140,11 @@ function createPopup(initialText) {
   }
 
   // Visual for active mode button
-  function updateActiveButtons() {
+  const updateActiveButtons = () => {
     div.querySelectorAll("button[data-mode]").forEach((b) => {
       b.classList.toggle("active", b.getAttribute("data-mode") === mode);
     });
-  }
+  };
 
   div.querySelectorAll("button[data-mode]").forEach((b) => {
     b.addEventListener("click", async () => {
@@ -168,11 +154,6 @@ function createPopup(initialText) {
     });
   });
   updateActiveButtons();
-
-  div.querySelector('[data-action="close"]').onclick = removePopup;
-  div.querySelector('[data-action="copy"]').onclick = () => {
-    navigator.clipboard.writeText(lastOutput || "");
-  };
 
   // 👉 Important: first remove popup (so it doesn't interfere with click/insert),
   // then in next tick restore and insert
@@ -199,17 +180,15 @@ function createPopup(initialText) {
   // start immediately (polish)
   runLLM();
 
-  async function runLLM(retryCount = 0) {
+  const runLLM = async (retryCount = 0) => {
     const status = div.querySelector(".status");
     const result = div.querySelector(".result");
     const applyBtn = div.querySelector('[data-action="apply"]');
-    const copyBtn = div.querySelector('[data-action="copy"]');
 
     if (!originalText?.trim()) {
       status.textContent = "No text to process";
       result.style.display = "none";
       applyBtn.disabled = true;
-      copyBtn.disabled = true;
       return;
     }
 
@@ -217,7 +196,6 @@ function createPopup(initialText) {
     status.textContent = isRetry ? `Retry ${retryCount}...` : "Processing…";
     result.style.display = "none";
     applyBtn.disabled = true;
-    copyBtn.disabled = true;
 
     try {
       const resp = await chrome.runtime.sendMessage({
@@ -245,12 +223,11 @@ function createPopup(initialText) {
       result.textContent = lastOutput;
       result.style.display = "block";
       applyBtn.disabled = !lastOutput;
-      copyBtn.disabled = !lastOutput;
     } catch (e) {
       status.textContent = "Connection error: " + e.message;
     }
-  }
-}
+  };
+};
 
 // open popup on signal
 chrome.runtime.onMessage.addListener((msg) => {
@@ -261,10 +238,19 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
-// close on Esc and click outside
+document.addEventListener(
+  "contextmenu",
+  (e) => {
+    console.log("contextmenu", e);
+    lastContextMouse = { x: e.clientX, y: e.clientY };
+  },
+  true
+);
+
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") removePopup();
 });
+
 document.addEventListener(
   "mousedown",
   (e) => {

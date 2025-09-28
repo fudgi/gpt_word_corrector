@@ -1,5 +1,9 @@
-// Local proxy server address
-const PROXY_ENDPOINT = "http://localhost:8787/v1/transform";
+const PROXY_ENDPOINT = process.env.PROXY_ENDPOINT;
+
+if (!OPENAI_API_KEY) {
+  console.error("❌ No PROXY_ENDPOINT found. Add it to .env");
+  process.exit(1);
+}
 
 // Create context menu item
 chrome.runtime.onInstalled.addListener(() => {
