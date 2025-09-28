@@ -67,60 +67,60 @@ app.post("/v1/transform", async (req, res) => {
       );
 
       // Simplified prompts for 2 modes
-      const prompts = {
-        polish: "Improve grammar and tone. Keep meaning.",
-        to_en: "Translate to natural English. Fix grammar.",
-      };
+      // const prompts = {
+      //   polish: "Improve grammar and tone. Keep meaning.",
+      //   to_en: "Translate to natural English. Fix grammar.",
+      // };
 
-      const system = `You are a writing assistant. ${prompts[mode]} Return only the result, no explanations.`;
-      const r = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: text },
-          ],
-          max_tokens: 500,
-          temperature: 0.3,
-        }),
-      });
+      // const system = `You are a writing assistant. ${prompts[mode]} Return only the result, no explanations.`;
+      // const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      //   method: "POST",
+      //   headers: {
+      //     Authorization: `Bearer ${OPENAI_API_KEY}`,
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify({
+      //     model: "gpt-4o-mini",
+      //     messages: [
+      //       { role: "system", content: system },
+      //       { role: "user", content: text },
+      //     ],
+      //     max_tokens: 500,
+      //     temperature: 0.3,
+      //   }),
+      // });
 
-      if (!r.ok) {
-        const errorText = await r.text();
-        console.error(`OpenAI API error: ${r.status} - ${errorText}`);
-        return res.status(500).json({
-          error: `API error: ${r.status}`,
-          details: r.status === 429 ? "Rate limit exceeded" : "Service error",
-        });
-      }
+      // if (!r.ok) {
+      //   const errorText = await r.text();
+      //   console.error(`OpenAI API error: ${r.status} - ${errorText}`);
+      //   return res.status(500).json({
+      //     error: `API error: ${r.status}`,
+      //     details: r.status === 429 ? "Rate limit exceeded" : "Service error",
+      //   });
+      // }
 
-      const data = await r.json();
-      const output = data.choices?.[0]?.message?.content?.trim() || "";
+      // const data = await r.json();
+      // const output = data.choices?.[0]?.message?.content?.trim() || "";
 
-      // Save to cache
-      if (output) {
-        cache.set(cacheKey, { output, timestamp: Date.now() });
-        // Clean old cache entries
-        if (cache.size > 1000) {
-          const now = Date.now();
-          for (const [key, value] of cache.entries()) {
-            if (now - value.timestamp > CACHE_TTL) {
-              cache.delete(key);
-            }
-          }
-        }
-      }
+      // // Save to cache
+      // if (output) {
+      //   cache.set(cacheKey, { output, timestamp: Date.now() });
+      //   // Clean old cache entries
+      //   if (cache.size > 1000) {
+      //     const now = Date.now();
+      //     for (const [key, value] of cache.entries()) {
+      //       if (now - value.timestamp > CACHE_TTL) {
+      //         cache.delete(key);
+      //       }
+      //     }
+      //   }
+      // }
 
-      const processingTime = Date.now() - startTime;
-      console.log(`Request completed in ${processingTime}ms`);
+      // const processingTime = Date.now() - startTime;
+      // console.log(`Request completed in ${processingTime}ms`);
 
-      const result = { output };
-      resolvers.forEach((resolve) => resolve(result));
+      // const result = { output };
+      // resolvers.forEach((resolve) => resolve(result));
     } catch (e) {
       const error = { error: String(e) };
       resolvers.forEach((resolve) => resolve(error));

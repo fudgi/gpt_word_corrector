@@ -1,9 +1,4 @@
-const PROXY_ENDPOINT = process.env.PROXY_ENDPOINT;
-
-if (!OPENAI_API_KEY) {
-  console.error("❌ No PROXY_ENDPOINT found. Add it to .env");
-  process.exit(1);
-}
+const PROXY_ENDPOINT = "http://localhost:8787/v1/transform";
 
 // Create context menu item
 chrome.runtime.onInstalled.addListener(() => {
@@ -17,10 +12,14 @@ chrome.runtime.onInstalled.addListener(() => {
 // On click - ask content script to show popup
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "correct-with-gpt" && tab?.id) {
-    chrome.tabs.sendMessage(tab.id, {
-      type: "OPEN_CORRECTOR",
-      selectionText: info.selectionText || "",
-    });
+    chrome.tabs.sendMessage(
+      tab.id,
+      {
+        type: "OPEN_CORRECTOR",
+        selectionText: info.selectionText || "",
+      },
+      { frameId: info.frameId }
+    );
   }
 });
 

@@ -177,9 +177,6 @@ const createPopup = (initialText) => {
     }, 0);
   };
 
-  // start immediately (polish)
-  runLLM();
-
   const runLLM = async (retryCount = 0) => {
     const status = div.querySelector(".status");
     const result = div.querySelector(".result");
@@ -227,6 +224,8 @@ const createPopup = (initialText) => {
       status.textContent = "Connection error: " + e.message;
     }
   };
+
+  runLLM();
 };
 
 // open popup on signal
@@ -241,7 +240,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 document.addEventListener(
   "contextmenu",
   (e) => {
-    console.log("contextmenu", e);
+    console.log("contextmenu!!", e);
     lastContextMouse = { x: e.clientX, y: e.clientY };
   },
   true
