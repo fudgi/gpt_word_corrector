@@ -80,3 +80,10 @@ word_correctior/
 - **API errors**: Check OpenAI API key and credits
 - **Text not inserting**: Try different input field
 - **Rate limiting**: Wait before next request
+
+
+## Planned Features
+
+- **Keyboard Shortcuts**: Hotkey activation for quick access
+- **API Keys & Limits**: Enhanced authentication and rate limiting
+- **Message Logging**: Database storage for all correction requests
