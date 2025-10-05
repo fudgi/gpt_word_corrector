@@ -69,6 +69,55 @@ const removePopup = () => {
   document.getElementById("corrector-popup")?.remove();
 };
 
+// Show notification to user
+const showNotification = (message, type = "info", duration = 3000) => {
+  // Remove existing notification
+  document.getElementById("corrector-notification")?.remove();
+
+  const notification = document.createElement("div");
+  notification.id = "corrector-notification";
+  notification.textContent = message;
+  notification.classList.add(type);
+
+  // Position notification near cursor or center of screen
+  const x = lastContextMouse.x + window.scrollX + 8;
+  const y = lastContextMouse.y + window.scrollY + 8;
+
+  Object.assign(notification.style, {
+    left: `${x}px`,
+    top: `${y}px`,
+  });
+
+  document.body.appendChild(notification);
+
+  // Auto remove after duration
+  setTimeout(() => {
+    notification.remove();
+  }, duration);
+};
+
+// Show loading indicator
+const showLoadingIndicator = (message = "Processing...") => {
+  // Remove existing notification
+  document.getElementById("corrector-notification")?.remove();
+
+  const notification = document.createElement("div");
+  notification.id = "corrector-notification";
+  notification.textContent = message;
+  notification.classList.add("loading", "info");
+
+  // Position notification near cursor or center of screen
+  const x = lastContextMouse.x + window.scrollX + 8;
+  const y = lastContextMouse.y + window.scrollY + 8;
+
+  Object.assign(notification.style, {
+    left: `${x}px`,
+    top: `${y}px`,
+  });
+
+  document.body.appendChild(notification);
+};
+
 // Get selection info for current context (used in 2 places)
 const getSelectionInfo = () => {
   const activeAtOpen = document.activeElement;
@@ -129,6 +178,10 @@ const directCorrectText = async (text, mode) => {
 
   const selectionInfo = getSelectionInfo();
 
+  // Show loading message
+  const modeText = mode === "polish" ? "polishing" : "translating";
+  showLoadingIndicator(`✏️ ${modeText} text...`);
+
   try {
     const resp = await chrome.runtime.sendMessage({
       type: "RUN_GPT",
@@ -139,16 +192,38 @@ const directCorrectText = async (text, mode) => {
 
     if (!resp?.ok) {
       console.error("Correction failed:", resp?.error);
+      showNotification(
+        `❌ Correction failed: ${resp?.error || "Unknown error"}`,
+        "error"
+      );
       return;
     }
 
     const correctedText = resp.output || "";
-    if (!correctedText) return;
+    if (!correctedText) {
+      showNotification("❌ No correction result received", "error");
+      return;
+    }
 
     // Apply the correction
-    applyCorrectedText(selectionInfo, correctedText);
+    const success = applyCorrectedText(selectionInfo, correctedText);
+
+    if (success) {
+      const successMessage =
+        mode === "polish"
+          ? "✅ Text corrected successfully!"
+          : "✅ Text translated successfully!";
+      showNotification(successMessage, "success");
+    } else {
+      const fallbackMessage =
+        mode === "polish"
+          ? "📋 Corrected text copied to clipboard"
+          : "📋 Translated text copied to clipboard";
+      showNotification(fallbackMessage, "info");
+    }
   } catch (e) {
     console.error("Direct correction error:", e);
+    showNotification(`❌ Connection error: ${e.message}`, "error");
   }
 };
 
@@ -231,7 +306,10 @@ const createPopup = (initialText) => {
     }
 
     const isRetry = retryCount > 0;
-    status.textContent = isRetry ? `Retry ${retryCount}...` : "Processing…";
+    const modeText = mode === "polish" ? "polishing" : "translating";
+    status.textContent = isRetry
+      ? `🔄 Retry ${retryCount}...`
+      : `✏️ ${modeText} text...`;
     result.style.display = "none";
     applyBtn.disabled = true;
 
@@ -251,18 +329,18 @@ const createPopup = (initialText) => {
           );
           return runLLM(retryCount + 1);
         }
-        status.textContent = "Error: " + (resp?.error || "unknown");
+        status.textContent = `❌ Error: ${resp?.error || "unknown"}`;
         return;
       }
 
       lastOutput = resp.output || "";
       const cacheIndicator = resp.cached ? " (cached)" : "";
-      status.textContent = `${mode} (formal)${cacheIndicator}`;
+      status.textContent = `✅ ${mode} (formal)${cacheIndicator}`;
       result.textContent = lastOutput;
       result.style.display = "block";
       applyBtn.disabled = !lastOutput;
     } catch (e) {
-      status.textContent = "Connection error: " + e.message;
+      status.textContent = `❌ Connection error: ${e.message}`;
     }
   };
 
