@@ -21,5 +21,19 @@
       "match_about_blank": true
     }
   ],
+  "commands": {
+    "polish": {
+      "suggested_key": {
+        "default": "Alt+Shift+P"
+      },
+      "description": "Polish selected text"
+    },
+    "to_en": {
+      "suggested_key": {
+        "default": "Alt+Shift+E"
+      },
+      "description": "Translate selected text to English"
+    }
+  },
   "action": { "default_title": "Corrector" }
 }

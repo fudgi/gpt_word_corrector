@@ -69,6 +69,77 @@ const removePopup = () => {
   document.getElementById("corrector-popup")?.remove();
 };
 
+const directCorrectText = async (text, mode) => {
+  if (!text?.trim()) return;
+
+  let selectionInfo = null;
+  const activeAtOpen = document.activeElement;
+
+  if (
+    activeAtOpen &&
+    (activeAtOpen.tagName === "TEXTAREA" ||
+      (activeAtOpen.tagName === "INPUT" &&
+        ["text", "search", "email", "url", "tel", "password"].includes(
+          activeAtOpen.type || "text"
+        )))
+  ) {
+    selectionInfo = {
+      type: "input",
+      element: activeAtOpen,
+      start: activeAtOpen.selectionStart ?? 0,
+      end: activeAtOpen.selectionEnd ?? 0,
+    };
+  } else if (activeAtOpen && activeAtOpen.isContentEditable) {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      selectionInfo = {
+        type: "contentEditable",
+        element: activeAtOpen,
+        range: sel.getRangeAt(0).cloneRange(),
+      };
+    }
+  } else {
+    const r = getCurrentRange();
+    if (r) {
+      selectionInfo = { type: "document", range: r.cloneRange() };
+    }
+  }
+
+  try {
+    const resp = await chrome.runtime.sendMessage({
+      type: "RUN_GPT",
+      mode,
+      text,
+      style: "formal",
+    });
+
+    if (!resp?.ok) {
+      console.error("Correction failed:", resp?.error);
+      return;
+    }
+
+    const correctedText = resp.output || "";
+    if (!correctedText) return;
+
+    // Apply the correction
+    let ok = false;
+    if (selectionInfo?.type === "input") {
+      ok = insertIntoInputBySavedSelection(selectionInfo, correctedText);
+    } else if (selectionInfo?.type === "contentEditable") {
+      ok = insertIntoContentEditableBySavedRange(selectionInfo, correctedText);
+    } else if (selectionInfo?.type === "document") {
+      ok = insertIntoDocumentRange(selectionInfo, correctedText);
+    }
+
+    if (!ok) {
+      // Fallback: put in clipboard
+      navigator.clipboard.writeText(correctedText);
+    }
+  } catch (e) {
+    console.error("Direct correction error:", e);
+  }
+};
+
 // --- main ---
 const createPopup = (initialText) => {
   removePopup();
@@ -234,6 +305,13 @@ chrome.runtime.onMessage.addListener((msg) => {
     const text =
       msg.selectionText || (window.getSelection?.().toString() ?? "");
     createPopup(text);
+  }
+  if (msg?.type === "OPEN_CORRECTOR_HOTKEY") {
+    if (!document.hasFocus()) return;
+    const text = window.getSelection?.().toString() ?? "";
+    if (!text.trim()) return;
+
+    directCorrectText(text, msg.command);
   }
 });
 

@@ -64,10 +64,17 @@ word_correctior/
 
 ## Usage
 
+### Context Menu
 1. Select text on any webpage
 2. Right-click → "Correct"
 3. Choose mode: "Polish" or "To English"
 4. Click "Apply" to replace text
+
+### Keyboard Shortcuts
+- **Alt+P**: Polish selected text (improve grammar and style)
+- **Alt+E**: Translate selected text to English
+
+Select text and press the hotkey for instant correction without opening the popup interface.
 
 ## Dependencies
 
@@ -84,6 +91,5 @@ word_correctior/
 
 ## Planned Features
 
-- **Keyboard Shortcuts**: Hotkey activation for quick access
 - **API Keys & Limits**: Enhanced authentication and rate limiting
 - **Message Logging**: Database storage for all correction requests

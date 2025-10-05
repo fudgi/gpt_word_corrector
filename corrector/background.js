@@ -23,6 +23,33 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
 });
 
+chrome.commands.onCommand.addListener(async (command, tab) => {
+  if (!tab?.id) return;
+
+  const url = tab.url || "";
+  if (/^(chrome|edge|about|chrome-extension):/i.test(url)) return;
+
+  try {
+    await chrome.tabs.sendMessage(tab.id, {
+      type: "OPEN_CORRECTOR_HOTKEY",
+      command,
+    });
+  } catch (e) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["content.js"],
+      });
+      await chrome.tabs.sendMessage(tab.id, {
+        type: "OPEN_CORRECTOR_HOTKEY",
+        command,
+      });
+    } catch (err) {
+      console.warn("Hotkey inject/send failed:", err);
+    }
+  }
+});
+
 // Request to proxy on command from content script
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === "RUN_GPT") {
