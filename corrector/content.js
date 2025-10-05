@@ -69,10 +69,8 @@ const removePopup = () => {
   document.getElementById("corrector-popup")?.remove();
 };
 
-const directCorrectText = async (text, mode) => {
-  if (!text?.trim()) return;
-
-  let selectionInfo = null;
+// Get selection info for current context (used in 2 places)
+const getSelectionInfo = () => {
   const activeAtOpen = document.activeElement;
 
   if (
@@ -83,7 +81,7 @@ const directCorrectText = async (text, mode) => {
           activeAtOpen.type || "text"
         )))
   ) {
-    selectionInfo = {
+    return {
       type: "input",
       element: activeAtOpen,
       start: activeAtOpen.selectionStart ?? 0,
@@ -92,7 +90,7 @@ const directCorrectText = async (text, mode) => {
   } else if (activeAtOpen && activeAtOpen.isContentEditable) {
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0) {
-      selectionInfo = {
+      return {
         type: "contentEditable",
         element: activeAtOpen,
         range: sel.getRangeAt(0).cloneRange(),
@@ -101,9 +99,35 @@ const directCorrectText = async (text, mode) => {
   } else {
     const r = getCurrentRange();
     if (r) {
-      selectionInfo = { type: "document", range: r.cloneRange() };
+      return { type: "document", range: r.cloneRange() };
     }
   }
+
+  return null;
+};
+
+const applyCorrectedText = (selectionInfo, correctedText) => {
+  let ok = false;
+  if (selectionInfo?.type === "input") {
+    ok = insertIntoInputBySavedSelection(selectionInfo, correctedText);
+  } else if (selectionInfo?.type === "contentEditable") {
+    ok = insertIntoContentEditableBySavedRange(selectionInfo, correctedText);
+  } else if (selectionInfo?.type === "document") {
+    ok = insertIntoDocumentRange(selectionInfo, correctedText);
+  }
+
+  if (!ok) {
+    // Fallback: put in clipboard
+    navigator.clipboard.writeText(correctedText);
+  }
+
+  return ok;
+};
+
+const directCorrectText = async (text, mode) => {
+  if (!text?.trim()) return;
+
+  const selectionInfo = getSelectionInfo();
 
   try {
     const resp = await chrome.runtime.sendMessage({
@@ -122,19 +146,7 @@ const directCorrectText = async (text, mode) => {
     if (!correctedText) return;
 
     // Apply the correction
-    let ok = false;
-    if (selectionInfo?.type === "input") {
-      ok = insertIntoInputBySavedSelection(selectionInfo, correctedText);
-    } else if (selectionInfo?.type === "contentEditable") {
-      ok = insertIntoContentEditableBySavedRange(selectionInfo, correctedText);
-    } else if (selectionInfo?.type === "document") {
-      ok = insertIntoDocumentRange(selectionInfo, correctedText);
-    }
-
-    if (!ok) {
-      // Fallback: put in clipboard
-      navigator.clipboard.writeText(correctedText);
-    }
+    applyCorrectedText(selectionInfo, correctedText);
   } catch (e) {
     console.error("Direct correction error:", e);
   }
@@ -177,38 +189,7 @@ const createPopup = (initialText) => {
   let lastOutput = "";
 
   // 📌 Save original insertion location
-  let selectionInfo = null;
-  const activeAtOpen = document.activeElement;
-
-  if (
-    activeAtOpen &&
-    (activeAtOpen.tagName === "TEXTAREA" ||
-      (activeAtOpen.tagName === "INPUT" &&
-        ["text", "search", "email", "url", "tel", "password"].includes(
-          activeAtOpen.type || "text"
-        )))
-  ) {
-    selectionInfo = {
-      type: "input",
-      element: activeAtOpen,
-      start: activeAtOpen.selectionStart ?? 0,
-      end: activeAtOpen.selectionEnd ?? 0,
-    };
-  } else if (activeAtOpen && activeAtOpen.isContentEditable) {
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      selectionInfo = {
-        type: "contentEditable",
-        element: activeAtOpen,
-        range: sel.getRangeAt(0).cloneRange(),
-      };
-    }
-  } else {
-    const r = getCurrentRange();
-    if (r) {
-      selectionInfo = { type: "document", range: r.cloneRange() };
-    }
-  }
+  const selectionInfo = getSelectionInfo();
 
   // Visual for active mode button
   const updateActiveButtons = () => {
@@ -233,18 +214,7 @@ const createPopup = (initialText) => {
     removePopup();
     // give engine one tick to refocus after DOM removal
     setTimeout(() => {
-      let ok = false;
-      if (selectionInfo?.type === "input") {
-        ok = insertIntoInputBySavedSelection(selectionInfo, lastOutput);
-      } else if (selectionInfo?.type === "contentEditable") {
-        ok = insertIntoContentEditableBySavedRange(selectionInfo, lastOutput);
-      } else if (selectionInfo?.type === "document") {
-        ok = insertIntoDocumentRange(selectionInfo, lastOutput);
-      }
-      if (!ok) {
-        // fallback: put in clipboard
-        navigator.clipboard.writeText(lastOutput);
-      }
+      applyCorrectedText(selectionInfo, lastOutput);
     }, 0);
   };
 
