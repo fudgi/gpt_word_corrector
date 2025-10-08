@@ -1,10 +1,67 @@
+if (window.__corrector_bound) {
+  console.debug("[Corrector] already bound, skipping duplicate injection");
+}
+window.__corrector_bound = true;
+
 let lastContextMouse = { x: 0, y: 0 };
+
+const modeText = {
+  polish: "✏️ polishing text...",
+  to_en: "✏️ translating text...",
+};
+
+const successMessageOptions = {
+  polish: "✅ Text corrected successfully!",
+  to_en: "✅ Text translated successfully!",
+};
+
+const fallbackMessageOptions = {
+  polish: "📋 Corrected text copied to clipboard",
+  to_en: "📋 Translated text copied to clipboard",
+};
 
 // --- helpers ---
 const getCurrentRange = () => {
   const sel = window.getSelection?.();
   if (!sel || sel.rangeCount === 0) return null;
   return sel.getRangeAt(0);
+};
+
+const sendBg = (message, attempts = 2) => {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (res) => {
+      const err = chrome.runtime.lastError;
+      if (err) return reject(new Error(err.message));
+      resolve(res);
+    });
+  }).catch(async (e) => {
+    if (attempts <= 0) throw e;
+    await new Promise((r) => setTimeout(r, 500));
+    return sendBg(message, attempts - 1);
+  });
+};
+
+const dispatchTextInputEvents = (target, text) => {
+  try {
+    target.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: true,
+        inputType: "insertText",
+        data: text,
+      })
+    );
+  } catch {}
+  try {
+    target.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        cancelable: false,
+        inputType: "insertText",
+        data: text,
+      })
+    );
+  } catch {}
 };
 
 // Insert into input/textarea by saved coordinates
@@ -19,7 +76,6 @@ const insertIntoInputBySavedSelection = (info, text) => {
   el.value = before + text + after;
   const caret = before.length + text.length;
   el.setSelectionRange(caret, caret);
-  el.dispatchEvent(new Event("input", { bubbles: true }));
   return true;
 };
 
@@ -98,27 +154,9 @@ const showNotification = (message, type = "info", duration = 3000) => {
 
 // Show loading indicator
 const showLoadingIndicator = (message = "Processing...") => {
-  // Remove existing notification
-  document.getElementById("corrector-notification")?.remove();
-
-  const notification = document.createElement("div");
-  notification.id = "corrector-notification";
-  notification.textContent = message;
-  notification.classList.add("loading", "info");
-
-  // Position notification near cursor or center of screen
-  const x = lastContextMouse.x + window.scrollX + 8;
-  const y = lastContextMouse.y + window.scrollY + 8;
-
-  Object.assign(notification.style, {
-    left: `${x}px`,
-    top: `${y}px`,
-  });
-
-  document.body.appendChild(notification);
+  showNotification(message, "loading", 0); // 0 duration means no auto-remove
 };
 
-// Get selection info for current context (used in 2 places)
 const getSelectionInfo = () => {
   const activeAtOpen = document.activeElement;
 
@@ -126,9 +164,7 @@ const getSelectionInfo = () => {
     activeAtOpen &&
     (activeAtOpen.tagName === "TEXTAREA" ||
       (activeAtOpen.tagName === "INPUT" &&
-        ["text", "search", "email", "url", "tel", "password"].includes(
-          activeAtOpen.type || "text"
-        )))
+        ["text", "search"].includes(activeAtOpen.type || "text")))
   ) {
     return {
       type: "input",
@@ -159,10 +195,17 @@ const applyCorrectedText = (selectionInfo, correctedText) => {
   let ok = false;
   if (selectionInfo?.type === "input") {
     ok = insertIntoInputBySavedSelection(selectionInfo, correctedText);
+    if (ok) dispatchTextInputEvents(selectionInfo.element, correctedText);
   } else if (selectionInfo?.type === "contentEditable") {
     ok = insertIntoContentEditableBySavedRange(selectionInfo, correctedText);
+    if (ok) dispatchTextInputEvents(selectionInfo.element, correctedText);
   } else if (selectionInfo?.type === "document") {
     ok = insertIntoDocumentRange(selectionInfo, correctedText);
+    if (ok)
+      dispatchTextInputEvents(
+        document.activeElement || document.body,
+        correctedText
+      );
   }
 
   if (!ok) {
@@ -178,12 +221,10 @@ const directCorrectText = async (text, mode) => {
 
   const selectionInfo = getSelectionInfo();
 
-  // Show loading message
-  const modeText = mode === "polish" ? "polishing" : "translating";
-  showLoadingIndicator(`✏️ ${modeText} text...`);
+  showLoadingIndicator(modeText[mode]);
 
   try {
-    const resp = await chrome.runtime.sendMessage({
+    const resp = await sendBg({
       type: "RUN_GPT",
       mode,
       text,
@@ -209,16 +250,10 @@ const directCorrectText = async (text, mode) => {
     const success = applyCorrectedText(selectionInfo, correctedText);
 
     if (success) {
-      const successMessage =
-        mode === "polish"
-          ? "✅ Text corrected successfully!"
-          : "✅ Text translated successfully!";
+      const successMessage = successMessageOptions[mode];
       showNotification(successMessage, "success");
     } else {
-      const fallbackMessage =
-        mode === "polish"
-          ? "📋 Corrected text copied to clipboard"
-          : "📋 Translated text copied to clipboard";
+      const fallbackMessage = fallbackMessageOptions[mode];
       showNotification(fallbackMessage, "info");
     }
   } catch (e) {
@@ -255,7 +290,7 @@ const createPopup = (initialText) => {
     top: `${lastContextMouse.y + window.scrollY + 8}px`,
     zIndex: 2147483647,
   });
-
+  div.addEventListener("mousedown", (e) => e.preventDefault());
   document.body.appendChild(div);
 
   let mode = "polish";
@@ -293,7 +328,7 @@ const createPopup = (initialText) => {
     }, 0);
   };
 
-  const runLLM = async (retryCount = 0) => {
+  const runLLM = async () => {
     const status = div.querySelector(".status");
     const result = div.querySelector(".result");
     const applyBtn = div.querySelector('[data-action="apply"]');
@@ -305,16 +340,12 @@ const createPopup = (initialText) => {
       return;
     }
 
-    const isRetry = retryCount > 0;
-    const modeText = mode === "polish" ? "polishing" : "translating";
-    status.textContent = isRetry
-      ? `🔄 Retry ${retryCount}...`
-      : `✏️ ${modeText} text...`;
+    status.textContent = modeText[mode];
     result.style.display = "none";
     applyBtn.disabled = true;
 
     try {
-      const resp = await chrome.runtime.sendMessage({
+      const resp = await sendBg({
         type: "RUN_GPT",
         mode,
         text: originalText,
@@ -322,20 +353,13 @@ const createPopup = (initialText) => {
       });
 
       if (!resp?.ok) {
-        // Retry for rate limit errors
-        if (resp?.retryable && retryCount < 2) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, 1000 * (retryCount + 1))
-          );
-          return runLLM(retryCount + 1);
-        }
         status.textContent = `❌ Error: ${resp?.error || "unknown"}`;
         return;
       }
 
       lastOutput = resp.output || "";
       const cacheIndicator = resp.cached ? " (cached)" : "";
-      status.textContent = `✅ ${mode} (formal)${cacheIndicator}`;
+      status.textContent = `${successMessageOptions[mode]}${cacheIndicator}`;
       result.textContent = lastOutput;
       result.style.display = "block";
       applyBtn.disabled = !lastOutput;
