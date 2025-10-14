@@ -10,28 +10,55 @@ A browser extension that provides AI-powered text correction and translation usi
 - **Smart Insertion**: Automatically replaces text in original location
 - **Caching**: Reduces API calls with built-in caching
 - **Rate Limiting**: Prevents API abuse
+- **Keyboard Shortcuts**: Quick access with Alt+Shift+P/E
+- **Modular Architecture**: Clean, maintainable codebase
 
 ## Project Structure
 
 ```
 word_correctior/
-├── corrector/           # Browser extension
-│   ├── manifest.json   # Extension config
-│   ├── background.js   # Service worker & API communication
-│   ├── content.js     # Popup UI & text manipulation
+├── src/                # Source code (modular components)
+│   ├── content.js     # Main content script entry point
+│   ├── popup.js       # Popup UI logic
+│   ├── ui.js          # UI components and styling
+│   ├── textInsertion.js # Smart text replacement
+│   ├── directCorrection.js # Keyboard shortcut handling
+│   ├── eventListeners.js # Event management
+│   ├── helpers.js     # Utility functions
+│   └── constants.js   # Configuration constants
+├── static/            # Static extension files
+│   ├── manifest.json  # Extension configuration
+│   ├── background.js  # Service worker & API communication
 │   ├── content.css    # Popup styling
 │   └── icons/         # Extension icons
+├── corrector/         # Built extension (generated)
 ├── server.js          # Express proxy server
-└── package.json       # Dependencies
+├── vite.config.js     # Build configuration
+└── package.json       # Dependencies & scripts
 ```
 
 ## Components
 
-**Browser Extension**
-- `manifest.json`: Chrome extension configuration
-- `background.js`: Context menu and API communication
-- `content.js`: Popup UI and smart text insertion
-- `content.css`: Dark theme styling
+**Source Code (src/)**
+- `content.js`: Main content script entry point
+- `popup.js`: Popup UI logic and state management
+- `ui.js`: UI components and DOM manipulation
+- `textInsertion.js`: Smart text replacement algorithms
+- `directCorrection.js`: Keyboard shortcut handling
+- `eventListeners.js`: Event management and delegation
+- `helpers.js`: Utility functions and helpers
+- `constants.js`: Configuration and constants
+
+**Static Files (static/)**
+- `manifest.json`: Chrome extension configuration (Manifest V3)
+- `background.js`: Service worker for context menu and API communication
+- `content.css`: Dark theme styling for popup interface
+- `icons/`: Extension icons (16px, 48px, 128px)
+
+**Build System**
+- `vite.config.js`: Vite build configuration with custom plugin
+- Automatically copies static files to `corrector/` directory
+- Bundles and optimizes source code for production
 
 **Proxy Server**
 - `server.js`: Express server with OpenAI API integration
@@ -51,13 +78,25 @@ word_correctior/
    OPENAI_API_KEY=your_openai_api_key_here
    ```
 
-3. **Start Server**
+3. **Build Extension**
    ```bash
+   # Development build with watch mode
    npm start
+   
+   # Production build
+   npm run build:prod
+   
+   # Development build (one-time)
+   npm run build
+   ```
+
+4. **Start Server**
+   ```bash
+   npm run server
    ```
    Server runs on `http://localhost:8787`
 
-4. **Load Extension**
+5. **Load Extension**
    - Go to `chrome://extensions/`
    - Enable "Developer mode"
    - Click "Load unpacked" → select `corrector/` folder
@@ -71,25 +110,58 @@ word_correctior/
 4. Click "Apply" to replace text
 
 ### Keyboard Shortcuts
-- **Alt+P**: Polish selected text (improve grammar and style)
-- **Alt+E**: Translate selected text to English
+- **Alt+Shift+P**: Polish selected text (improve grammar and style)
+- **Alt+Shift+E**: Translate selected text to English
 
 Select text and press the hotkey for instant correction without opening the popup interface.
 
 ## Dependencies
 
-- `express`, `express-rate-limit`, `node-fetch`, `dotenv`
+**Runtime Dependencies**
+- `express`: Web server framework
+- `express-rate-limit`: API rate limiting
+- `node-fetch`: HTTP client for API requests
+- `dotenv`: Environment variable management
+
+**Development Dependencies**
+- `vite`: Modern build tool for bundling and development
+
+**AI Model**
 - Uses GPT-4o-mini model (temperature: 0.3, max tokens: 500)
+
+## Development
+
+### Build Process
+The project uses Vite for building the browser extension:
+
+1. **Source Code**: Located in `src/` directory with modular components
+2. **Static Files**: Extension assets in `static/` directory
+3. **Build Output**: Generated `corrector/` directory contains the complete extension
+4. **Watch Mode**: `npm start` rebuilds automatically on file changes
+
+### File Organization
+- **Modular Architecture**: Each feature is separated into its own module
+- **Clean Separation**: UI logic, text manipulation, and event handling are isolated
+- **Easy Maintenance**: Clear file structure makes debugging and updates straightforward
+
+### Adding Features
+1. Create new modules in `src/` directory
+2. Import and use in `content.js` or other entry points
+3. Run build process to generate updated extension
+4. Reload extension in Chrome to test changes
 
 ## Troubleshooting
 
 - **Extension not working**: Ensure server is running on port 8787
+- **Build errors**: Check that all imports are correct in source files
 - **API errors**: Check OpenAI API key and credits
 - **Text not inserting**: Try different input field
 - **Rate limiting**: Wait before next request
-
+- **Extension not updating**: Reload extension in Chrome after rebuilding
 
 ## Planned Features
 
 - **API Keys & Limits**: Enhanced authentication and rate limiting
 - **Message Logging**: Database storage for all correction requests
+- **Custom Prompts**: User-defined correction templates
+- **Language Support**: Additional translation languages
