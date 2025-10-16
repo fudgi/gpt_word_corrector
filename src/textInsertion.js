@@ -1,6 +1,121 @@
-import { dispatchTextInputEvents, getCurrentRange } from './helpers.js';
+import { getCurrentRange } from "./helpers.js";
 
-// Insert into input/textarea by saved coordinates
+// Centralized event emission for text input
+const emitTextInputEvents = (target, text) => {
+  try {
+    target.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: true,
+        inputType: "insertText",
+        data: text,
+      })
+    );
+  } catch {}
+  try {
+    target.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        cancelable: false,
+        inputType: "insertText",
+        data: text,
+      })
+    );
+  } catch {}
+};
+
+// Unified text application function
+export const applyText = (selectionInfo, text) => {
+  if (!selectionInfo || !text) return false;
+
+  let success = false;
+  let targetElement = null;
+
+  switch (selectionInfo.type) {
+    case "input": {
+      const el = selectionInfo.element;
+      if (!el || el.disabled || el.readOnly) break;
+
+      el.focus({ preventScroll: true });
+      const start = selectionInfo.start ?? el.selectionStart ?? 0;
+      const end = selectionInfo.end ?? el.selectionEnd ?? 0;
+      const before = el.value.slice(0, start);
+      const after = el.value.slice(end);
+      el.value = before + text + after;
+      const caret = before.length + text.length;
+      el.setSelectionRange(caret, caret);
+
+      success = true;
+      targetElement = el;
+      break;
+    }
+
+    case "contentEditable": {
+      const el = selectionInfo.element;
+      const saved = selectionInfo.range;
+      if (!el || !el.isContentEditable || !saved) break;
+
+      el.focus({ preventScroll: true });
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      const range = saved.cloneRange();
+      sel.addRange(range);
+
+      // Try native method first
+      const ok = document.execCommand("insertText", false, text);
+      if (ok) {
+        success = true;
+        targetElement = el;
+        break;
+      }
+
+      // Fallback: manual replacement
+      range.deleteContents();
+      const node = document.createTextNode(text);
+      range.insertNode(node);
+      // Set cursor after insertion
+      sel.removeAllRanges();
+      const after = document.createRange();
+      after.setStartAfter(node);
+      after.collapse(true);
+      sel.addRange(after);
+
+      success = true;
+      targetElement = el;
+      break;
+    }
+
+    case "document": {
+      const saved = selectionInfo.range;
+      if (!saved) break;
+
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      const range = saved.cloneRange();
+      sel.addRange(range);
+      range.deleteContents();
+      range.insertNode(document.createTextNode(text));
+
+      success = true;
+      targetElement = document.activeElement || document.body;
+      break;
+    }
+  }
+
+  // Emit events if insertion was successful
+  if (success && targetElement) {
+    emitTextInputEvents(targetElement, text);
+  }
+
+  // Fallback: put in clipboard if insertion failed
+  if (!success) {
+    navigator.clipboard.writeText(text);
+  }
+
+  return success;
+};
+
+// Legacy functions for backward compatibility
 export const insertIntoInputBySavedSelection = (info, text) => {
   const el = info?.element;
   if (!el || el.disabled || el.readOnly) return false;
@@ -15,7 +130,6 @@ export const insertIntoInputBySavedSelection = (info, text) => {
   return true;
 };
 
-// Insert into contentEditable by saved Range
 export const insertIntoContentEditableBySavedRange = (info, text) => {
   const el = info?.element;
   const saved = info?.range;
@@ -44,7 +158,6 @@ export const insertIntoContentEditableBySavedRange = (info, text) => {
   return true;
 };
 
-// Insert into arbitrary document Range
 export const insertIntoDocumentRange = (info, text) => {
   const saved = info?.range;
   if (!saved) return false;
@@ -92,26 +205,5 @@ export const getSelectionInfo = () => {
 };
 
 export const applyCorrectedText = (selectionInfo, correctedText) => {
-  let ok = false;
-  if (selectionInfo?.type === "input") {
-    ok = insertIntoInputBySavedSelection(selectionInfo, correctedText);
-    if (ok) dispatchTextInputEvents(selectionInfo.element, correctedText);
-  } else if (selectionInfo?.type === "contentEditable") {
-    ok = insertIntoContentEditableBySavedRange(selectionInfo, correctedText);
-    if (ok) dispatchTextInputEvents(selectionInfo.element, correctedText);
-  } else if (selectionInfo?.type === "document") {
-    ok = insertIntoDocumentRange(selectionInfo, correctedText);
-    if (ok)
-      dispatchTextInputEvents(
-        document.activeElement || document.body,
-        correctedText
-      );
-  }
-
-  if (!ok) {
-    // Fallback: put in clipboard
-    navigator.clipboard.writeText(correctedText);
-  }
-
-  return ok;
+  return applyText(selectionInfo, correctedText);
 };

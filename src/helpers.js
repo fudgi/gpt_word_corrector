@@ -18,26 +18,3 @@ export const sendBg = (message, attempts = 2) => {
     return sendBg(message, attempts - 1);
   });
 };
-
-export const dispatchTextInputEvents = (target, text) => {
-  try {
-    target.dispatchEvent(
-      new InputEvent("beforeinput", {
-        bubbles: true,
-        cancelable: true,
-        inputType: "insertText",
-        data: text,
-      })
-    );
-  } catch {}
-  try {
-    target.dispatchEvent(
-      new InputEvent("input", {
-        bubbles: true,
-        cancelable: false,
-        inputType: "insertText",
-        data: text,
-      })
-    );
-  } catch {}
-};
