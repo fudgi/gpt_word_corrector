@@ -1,0 +1,61 @@
+:host {
+  position: absolute;
+  z-index: 2147483648;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  max-width: 300px;
+  word-wrap: break-word;
+  animation: slideIn 0.3s ease-out;
+  transition: opacity 0.3s ease-out;
+}
+
+:host(.fade-out) {
+  opacity: 0;
+}
+
+:host(.info) {
+  background: #1f1f1f;
+}
+
+:host(.success) {
+  background: #16a34a;
+}
+
+:host(.error) {
+  background: #dc2626;
+}
+
+:host(.loading)::after {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

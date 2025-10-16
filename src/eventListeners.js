@@ -1,6 +1,6 @@
-import { createPopup } from './popup.js';
-import { directCorrectText } from './directCorrection.js';
-import { removePopup, setLastContextMouse } from './ui.js';
+import { createPopup } from "./popup.js";
+import { directCorrectText } from "./directCorrection.js";
+import { removePopup, setLastContextMouse } from "./ui.js";
 
 // Event listeners setup
 export const setupEventListeners = () => {
@@ -30,11 +30,11 @@ export const setupEventListeners = () => {
   );
 
   // Chrome runtime message listener
-  chrome.runtime.onMessage.addListener((msg) => {
+  chrome.runtime.onMessage.addListener(async (msg) => {
     if (msg?.type === "OPEN_CORRECTOR") {
       const text =
         msg.selectionText || (window.getSelection?.().toString() ?? "");
-      createPopup(text);
+      await createPopup(text);
     }
     if (msg?.type === "OPEN_CORRECTOR_HOTKEY") {
       if (!document.hasFocus()) return;

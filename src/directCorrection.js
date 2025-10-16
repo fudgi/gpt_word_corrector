@@ -1,7 +1,11 @@
-import { sendBg } from './helpers.js';
-import { getSelectionInfo, applyCorrectedText } from './textInsertion.js';
-import { showLoadingIndicator, showNotification } from './ui.js';
-import { modeText, successMessageOptions, fallbackMessageOptions } from './constants.js';
+import { sendBg } from "./helpers.js";
+import { getSelectionInfo, applyCorrectedText } from "./textInsertion.js";
+import { showLoadingIndicator, showNotification } from "./ui.js";
+import {
+  modeText,
+  successMessageOptions,
+  fallbackMessageOptions,
+} from "./constants.js";
 
 export const directCorrectText = async (text, mode) => {
   if (!text?.trim()) return;

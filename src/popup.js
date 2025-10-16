@@ -1,15 +1,39 @@
-import { sendBg } from './helpers.js';
-import { getSelectionInfo, applyCorrectedText } from './textInsertion.js';
-import { removePopup, getLastContextMouse } from './ui.js';
-import { modeText, successMessageOptions } from './constants.js';
+import { sendBg } from "./helpers.js";
+import { getSelectionInfo, applyCorrectedText } from "./textInsertion.js";
+import { removePopup, getLastContextMouse } from "./ui.js";
+import { modeText, successMessageOptions } from "./constants.js";
+
+// Load CSS styles for Shadow DOM
+const loadCSS = async (cssPath) => {
+  try {
+    const response = await fetch(chrome.runtime.getURL(cssPath));
+    return await response.text();
+  } catch (error) {
+    console.warn(`Failed to load CSS from ${cssPath}:`, error);
+    return "";
+  }
+};
 
 // Main popup creation and management
-export const createPopup = (initialText) => {
+export const createPopup = async (initialText) => {
   removePopup();
 
-  const div = document.createElement("div");
-  div.id = "corrector-popup";
-  div.innerHTML = `
+  // Create Shadow DOM container
+  const shadowHost = document.createElement("div");
+  shadowHost.id = "corrector-popup";
+
+  // Create Shadow Root
+  const shadowRoot = shadowHost.attachShadow({ mode: "open" });
+
+  // Load and add styles to Shadow DOM
+  const popupStyles = await loadCSS("src/popup.css");
+  const styleElement = document.createElement("style");
+  styleElement.textContent = popupStyles;
+  shadowRoot.appendChild(styleElement);
+
+  // Create popup content
+  const popupContent = document.createElement("div");
+  popupContent.innerHTML = `
     <div class="row">
       <button data-mode="polish" title="Improve grammar and style">Polish</button>
       <button data-mode="to_en" title="Translate to English">To English</button>
@@ -25,15 +49,17 @@ export const createPopup = (initialText) => {
     </div>
   `;
 
+  shadowRoot.appendChild(popupContent);
+
   const lastContextMouse = getLastContextMouse();
-  Object.assign(div.style, {
+  Object.assign(shadowHost.style, {
     position: "absolute",
     left: `${lastContextMouse.x + window.scrollX + 8}px`,
     top: `${lastContextMouse.y + window.scrollY + 8}px`,
     zIndex: 2147483647,
   });
-  div.addEventListener("mousedown", (e) => e.preventDefault());
-  document.body.appendChild(div);
+  shadowHost.addEventListener("mousedown", (e) => e.preventDefault());
+  document.body.appendChild(shadowHost);
 
   let mode = "polish";
   let style = "formal";
@@ -45,12 +71,12 @@ export const createPopup = (initialText) => {
 
   // Visual for active mode button
   const updateActiveButtons = () => {
-    div.querySelectorAll("button[data-mode]").forEach((b) => {
+    shadowRoot.querySelectorAll("button[data-mode]").forEach((b) => {
       b.classList.toggle("active", b.getAttribute("data-mode") === mode);
     });
   };
 
-  div.querySelectorAll("button[data-mode]").forEach((b) => {
+  shadowRoot.querySelectorAll("button[data-mode]").forEach((b) => {
     b.addEventListener("click", async () => {
       mode = b.getAttribute("data-mode");
       updateActiveButtons();
@@ -61,7 +87,7 @@ export const createPopup = (initialText) => {
 
   // 👉 Important: first remove popup (so it doesn't interfere with click/insert),
   // then in next tick restore and insert
-  div.querySelector('[data-action="apply"]').onclick = () => {
+  shadowRoot.querySelector('[data-action="apply"]').onclick = () => {
     if (!lastOutput) return;
     removePopup();
     // give engine one tick to refocus after DOM removal
@@ -71,9 +97,9 @@ export const createPopup = (initialText) => {
   };
 
   const runLLM = async () => {
-    const status = div.querySelector(".status");
-    const result = div.querySelector(".result");
-    const applyBtn = div.querySelector('[data-action="apply"]');
+    const status = shadowRoot.querySelector(".status");
+    const result = shadowRoot.querySelector(".result");
+    const applyBtn = shadowRoot.querySelector('[data-action="apply"]');
 
     if (!originalText?.trim()) {
       status.textContent = "No text to process";

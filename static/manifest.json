@@ -17,7 +17,6 @@
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_idle",
-      "all_frames": true,
       "match_about_blank": true
     }
   ],
@@ -35,5 +34,11 @@
       "description": "Translate selected text to English"
     }
   },
-  "action": { "default_title": "Corrector" }
+  "action": { "default_title": "Corrector" },
+  "web_accessible_resources": [
+    {
+      "resources": ["src/popup.css", "src/notification.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
