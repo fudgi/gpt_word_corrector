@@ -6,7 +6,10 @@
     "server": "node server.js",
     "build:prod": "vite build",
     "build": "vite build --mode development",
-    "start": "vite build --watch"
+    "start": "vite build --watch",
+    "build:ext": "vite build --mode development",
+    "e2e:proxy": "CORRECTOR_TEST=1 node e2e/proxy-test-server.js",
+    "e2e": "npm run build:ext && npm run e2e:proxy & npx playwright test --config=e2e/playwright.config.ts"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +22,8 @@
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.41.2",
+    "@types/node": "^20.10.6",
     "vite": "^5.0.0"
   }
 }
