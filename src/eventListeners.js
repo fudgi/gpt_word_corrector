@@ -44,4 +44,18 @@ export const setupEventListeners = () => {
       directCorrectText(text, msg.command);
     }
   });
+
+  // Debug hook for automated testing (Flow B)
+  if (window.__CORRECTOR_TEST__) {
+    window.addEventListener("message", (event) => {
+      const payload = event?.data;
+      if (payload?.type !== "CORRECTOR_DEBUG_CONTEXT") return;
+
+      const mode = payload.mode || "polish";
+      const text = window.getSelection?.().toString() ?? "";
+      if (!text.trim()) return;
+
+      directCorrectText(text, mode);
+    });
+  }
 };
