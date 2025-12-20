@@ -27,3 +27,7 @@ corrector/
 # Build outputs
 build/
 dist/
+
+playwright-report/
+tmp-playwright-profile/
+test-results/
