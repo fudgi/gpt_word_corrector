@@ -7,48 +7,80 @@ import {
   fallbackMessageOptions,
 } from "./constants.js";
 
-export const directCorrectText = async (text, mode) => {
-  if (!text?.trim()) return;
+function sendRunGpt(mode, text) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "RUN_GPT", mode, text }, (resp) =>
+      resolve(resp)
+    );
+  });
+}
 
+function applyToActiveTextInput(output, start, end) {
+  const el = document.activeElement;
+
+  const ok =
+    el instanceof HTMLTextAreaElement ||
+    (el instanceof HTMLInputElement &&
+      !["button", "checkbox", "radio", "submit", "file"].includes(el.type));
+
+  if (!ok) return false;
+
+  const value = el.value;
+  el.value = value.slice(0, start) + output + value.slice(end);
+
+  const caret = start + output.length;
+  el.setSelectionRange(caret, caret);
+
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  return true;
+}
+
+export async function directCorrectText(payload) {
+  const { command, text, source } = payload;
+
+  // 1) call background proxy
+  const resp = await sendRunGpt(command, text);
+  if (!resp?.ok) {
+    showNotification(
+      `❌ Correction failed: ${resp?.error || "Unknown error"}`,
+      "error"
+    );
+    return;
+  }
+
+  const output = resp.output ?? "";
+  if (!output) return;
+
+  // 2) apply result
+  if (source?.kind === "text-input") {
+    const applied = applyToActiveTextInput(output, source.start, source.end);
+    if (!applied) {
+      return;
+    }
+
+    // 3) show notification
+    const successMessage = successMessageOptions[command];
+    showNotification(successMessage, "success");
+    return;
+  }
+
+  // fallback for dom selection/contenteditable
   const selectionInfo = getSelectionInfo();
-
-  showLoadingIndicator(modeText[mode]);
+  if (!selectionInfo) {
+    return;
+  }
 
   try {
-    const resp = await sendBg({
-      type: "RUN_GPT",
-      mode,
-      text,
-      style: "formal",
-    });
-
-    if (!resp?.ok) {
-      console.error("Correction failed:", resp?.error);
-      showNotification(
-        `❌ Correction failed: ${resp?.error || "Unknown error"}`,
-        "error"
-      );
-      return;
-    }
-
-    const correctedText = resp.output || "";
-    if (!correctedText) {
-      showNotification("❌ No correction result received", "error");
-      return;
-    }
-
-    // Apply the correction
-    const success = applyCorrectedText(selectionInfo, correctedText);
+    const success = applyCorrectedText(selectionInfo, output);
 
     if (success) {
-      const successMessage = successMessageOptions[mode];
+      const successMessage = successMessageOptions[command];
       showNotification(successMessage, "success");
     } else {
-      const fallbackMessage = fallbackMessageOptions[mode];
+      const fallbackMessage = fallbackMessageOptions[command];
       showNotification(fallbackMessage, "info");
     }
   } catch (e) {
-    console.error("Direct correction error:", e);
     showNotification(`❌ Connection error: ${e.message}`, "error");
   }
-};
+}

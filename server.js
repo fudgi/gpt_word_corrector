@@ -50,8 +50,16 @@ app.post("/v1/transform", async (req, res) => {
 
   // Check deduplication
   if (pendingRequests.has(cacheKey)) {
+    const pendingResolvers = pendingRequests.get(cacheKey);
     return new Promise((resolve) => {
-      pendingRequests.get(cacheKey).push(resolve);
+      pendingResolvers.push((result) => {
+        if (result.error) {
+          res.status(500).json(result);
+        } else {
+          res.json(result);
+        }
+        resolve();
+      });
     });
   }
 
@@ -93,10 +101,12 @@ app.post("/v1/transform", async (req, res) => {
       if (!r.ok) {
         const errorText = await r.text();
         console.error(`OpenAI API error: ${r.status} - ${errorText}`);
-        return res.status(500).json({
+        const error = {
           error: `API error: ${r.status}`,
           details: r.status === 429 ? "Rate limit exceeded" : "Service error",
-        });
+        };
+        resolvers.forEach((resolve) => resolve(error));
+        return;
       }
 
       const data = await r.json();
@@ -137,4 +147,22 @@ app.post("/v1/transform", async (req, res) => {
   });
 });
 
-app.listen(8787, () => console.log("Proxy on http://localhost:8787"));
+const PORT = 8787;
+
+app
+  .listen(PORT, () => {
+    console.log(`Proxy on http://localhost:${PORT}`);
+  })
+  .on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(
+        `❌ Port ${PORT} is already in use. Please stop the other process or use a different port.`
+      );
+      console.error(
+        `   To find the process using port ${PORT}, run: lsof -ti:${PORT}`
+      );
+    } else {
+      console.error("❌ Server error:", err);
+    }
+    process.exit(1);
+  });

@@ -45,8 +45,50 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
         command,
       });
     } catch (err) {
-      console.warn("Hotkey inject/send failed:", err);
+      // Hotkey inject/send failed
     }
+  }
+});
+
+// Handle DOM-level hotkey messages from content script
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === "OPEN_CORRECTOR_DOM_HOTKEY") {
+    // Forward to existing OPEN_CORRECTOR_HOTKEY flow for the active tab
+    (async () => {
+      try {
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (!tab?.id) return;
+
+        const url = tab.url || "";
+        if (/^(chrome|edge|about|chrome-extension):/i.test(url)) return;
+
+        try {
+          await chrome.tabs.sendMessage(tab.id, {
+            type: "OPEN_CORRECTOR_HOTKEY",
+            command: msg.command,
+          });
+        } catch (e) {
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              files: ["content.js"],
+            });
+            await chrome.tabs.sendMessage(tab.id, {
+              type: "OPEN_CORRECTOR_HOTKEY",
+              command: msg.command,
+            });
+          } catch (err) {
+            // DOM hotkey inject/send failed
+          }
+        }
+      } catch (err) {
+        // DOM hotkey handling failed
+      }
+    })();
+    return false; // no response needed
   }
 });
 
