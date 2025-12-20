@@ -1,6 +1,6 @@
 import { sendBg } from "./helpers.js";
 import { getSelectionInfo, applyCorrectedText } from "./textInsertion.js";
-import { removePopup, getLastContextMouse } from "./ui.js";
+import { removePopup, getLastContextMouse, showNotification } from "./ui.js";
 import { modeText, successMessageOptions } from "./constants.js";
 
 // Load CSS styles for Shadow DOM
@@ -93,6 +93,13 @@ export const createPopup = async (initialText) => {
     // give engine one tick to refocus after DOM removal
     setTimeout(() => {
       applyCorrectedText(selectionInfo, lastOutput);
+      // show success notification after text is applied
+      showNotification(
+        successMessageOptions[mode] ?? "✅ Applied",
+        "success"
+      ).catch(() => {
+        // ignore errors
+      });
     }, 0);
   };
 

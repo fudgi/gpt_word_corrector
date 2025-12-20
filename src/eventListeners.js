@@ -2,22 +2,14 @@ import { createPopup } from "./popup.js";
 import { directCorrectText } from "./directCorrection.js";
 import { removePopup, setLastContextMouse } from "./ui.js";
 
-function getSelectionSource() {
-  const active = document.activeElement;
-
-  // textarea / input
-  if (
-    active instanceof HTMLTextAreaElement ||
-    (active instanceof HTMLInputElement &&
-      !["button", "checkbox", "radio", "submit", "file"].includes(active.type))
-  ) {
-    return {
-      kind: "text-input",
-      start: active.selectionStart ?? 0,
-      end: active.selectionEnd ?? 0,
-    };
-  }
-  return { kind: "dom-selection" };
+function isEditableFocused() {
+  const a = document.activeElement;
+  return (
+    a instanceof HTMLTextAreaElement ||
+    (a instanceof HTMLInputElement &&
+      !["button", "checkbox", "radio", "submit", "file"].includes(a.type)) ||
+    (a && a.isContentEditable)
+  );
 }
 
 // Event listeners setup
@@ -40,6 +32,9 @@ export const setupEventListeners = () => {
   document.addEventListener(
     "keydown",
     (e) => {
+      // Only handle when editable element is focused
+      if (!isEditableFocused()) return;
+
       // Ctrl+Shift+1 → polish
       if (e.ctrlKey && e.shiftKey && e.key === "1") {
         e.preventDefault();
@@ -63,6 +58,45 @@ export const setupEventListeners = () => {
     },
     true // capture phase
   );
+
+  // E2E test bridge: page -> content -> background
+  window.addEventListener("message", (event) => {
+    if (event.source !== window) return;
+    const msg = event.data;
+
+    // Only allow on localhost/127.0.0.1 for security
+    if (
+      !location.hostname.startsWith("127.0.0.1") &&
+      location.hostname !== "localhost"
+    )
+      return;
+
+    if (msg?.type === "__E2E_CONTEXT_MENU_CLICK__") {
+      try {
+        chrome.runtime.sendMessage(
+          {
+            type: "__TEST_CONTEXT_MENU_CLICK__",
+            selectionText: msg.selectionText || "",
+            frameId: msg.frameId,
+          },
+          (resp) => {
+            window.postMessage(
+              { type: "__E2E_CONTEXT_MENU_CLICK_RESULT__", resp },
+              "*"
+            );
+          }
+        );
+      } catch (e) {
+        window.postMessage(
+          {
+            type: "__E2E_CONTEXT_MENU_CLICK_RESULT__",
+            resp: { ok: false, error: String(e) },
+          },
+          "*"
+        );
+      }
+    }
+  });
 
   // Click outside popup to close
   document.addEventListener(
@@ -88,6 +122,7 @@ export const setupEventListeners = () => {
       const active = document.activeElement;
 
       let text = "";
+      let source = { kind: "dom-selection" };
 
       // textarea / input
       if (
@@ -100,9 +135,11 @@ export const setupEventListeners = () => {
         const start = active.selectionStart ?? 0;
         const end = active.selectionEnd ?? 0;
         text = active.value.slice(start, end);
+        source = { kind: "text-input", start, end };
       } else {
         // fallback: normal page selection
         text = window.getSelection?.().toString() ?? "";
+        source = { kind: "dom-selection" };
       }
 
       if (!text.trim()) return;
@@ -110,7 +147,7 @@ export const setupEventListeners = () => {
       directCorrectText({
         command: msg.command,
         text,
-        source: getSelectionSource(),
+        source,
       });
     }
   });

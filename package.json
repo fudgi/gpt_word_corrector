@@ -8,8 +8,8 @@
     "build:prod": "vite build",
     "build": "vite build --mode development",
     "start": "vite build --watch",
-    "test": "playwright test",
-    "test:ui": "playwright test --ui"
+    "test": "npm run build:prod && playwright test",
+    "test:ui": "npm run build:prod && playwright test --ui"
   },
   "keywords": [],
   "author": "",

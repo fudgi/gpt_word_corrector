@@ -28,47 +28,56 @@ export const showNotification = async (
   type = "info",
   duration = 3000
 ) => {
-  // Remove existing notification
-  document.getElementById("corrector-notification")?.remove();
+  // Clean up previous notification and its timers
+  const prev = document.getElementById("corrector-notification");
+  if (prev) {
+    clearTimeout(prev.__fadeTimer);
+    clearTimeout(prev.__removeTimer);
+    prev.remove();
+  }
 
-  // Create Shadow DOM container for notification
+  const isE2E = Boolean(window.__PW_E2E__);
+  const ttl = isE2E ? 8000 : duration;
+
   const notificationHost = document.createElement("div");
   notificationHost.id = "corrector-notification";
+  notificationHost.setAttribute("data-testid", "corrector-notification");
   notificationHost.classList.add(type);
 
-  // Create Shadow Root
   const shadowRoot = notificationHost.attachShadow({ mode: "open" });
 
-  // Load and add styles to Shadow DOM
-  const notificationStyles = await loadCSS("src/notification.css");
-  const style = document.createElement("style");
-  style.textContent = notificationStyles;
-  shadowRoot.appendChild(style);
-
-  // Create notification content
+  // Put content immediately (so tests can see it right away)
   const notificationContent = document.createElement("div");
   notificationContent.textContent = message;
   shadowRoot.appendChild(notificationContent);
 
-  // Position notification near cursor or center of screen
+  // Position early
   const x = lastContextMouse.x + window.scrollX + 8;
   const y = lastContextMouse.y + window.scrollY + 8;
+  Object.assign(notificationHost.style, { left: `${x}px`, top: `${y}px` });
 
-  Object.assign(notificationHost.style, {
-    left: `${x}px`,
-    top: `${y}px`,
-  });
-
+  // Append to DOM BEFORE async CSS load
   document.body.appendChild(notificationHost);
 
-  // Auto remove after duration
-  if (duration > 0) {
-    setTimeout(() => {
+  // Load styles (async, best-effort)
+  try {
+    const notificationStyles = await loadCSS("src/notification.css");
+    if (notificationStyles) {
+      const style = document.createElement("style");
+      style.textContent = notificationStyles;
+      shadowRoot.prepend(style);
+    }
+  } catch {
+    // ignore
+  }
+
+  if (ttl > 0) {
+    notificationHost.__fadeTimer = setTimeout(() => {
       notificationHost.classList.add("fade-out");
-      setTimeout(() => {
+      notificationHost.__removeTimer = setTimeout(() => {
         notificationHost.remove();
       }, 300);
-    }, duration);
+    }, ttl);
   }
 };
 
