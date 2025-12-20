@@ -60,9 +60,22 @@ chrome.commands.onCommand.addListener((command, tab) => {
   void sendHotkey(tab.id, command);
 });
 
+function isE2EMessage(msg, sender) {
+  if (!msg?.__pw_e2e) return false;
+
+  // hardening (optional, but I'd keep it):
+  const url = sender?.tab?.url || "";
+  return /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//.test(url);
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg?.type) {
     case "__TEST_CONTEXT_MENU_CLICK__": {
+      if (!isE2EMessage(msg, sender)) {
+        sendResponse?.({ ok: false, error: "E2E-only" });
+        return true;
+      }
+
       const tabId = sender.tab?.id;
       void (async () => {
         const ok = await openCorrector(
@@ -74,10 +87,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           ok ? { ok: true } : { ok: false, error: "openCorrector failed" }
         );
       })();
+
       return true;
     }
 
     case "OPEN_CORRECTOR_DOM_HOTKEY": {
+      if (!isE2EMessage(msg, sender)) return;
       const tabId = sender.tab?.id;
       if (!tabId) return;
       void sendHotkey(tabId, msg.command);

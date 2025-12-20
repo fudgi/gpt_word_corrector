@@ -36,7 +36,7 @@ export const showNotification = async (
     prev.remove();
   }
 
-  const isE2E = Boolean(window.__PW_E2E__);
+  const isE2E = document.documentElement.getAttribute("data-pw-e2e") === "1";
   const ttl = isE2E ? 8000 : duration;
 
   const notificationHost = document.createElement("div");

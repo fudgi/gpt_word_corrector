@@ -12,90 +12,80 @@ function isEditableFocused() {
   );
 }
 
+function isE2EEnabled() {
+  return document.documentElement.getAttribute("data-pw-e2e") === "1";
+}
+
+function isLocalhost() {
+  return location.hostname === "localhost" || location.hostname === "127.0.0.1";
+}
+
 // Event listeners setup
 export const setupEventListeners = () => {
-  // Context menu event listener
   document.addEventListener(
     "contextmenu",
-    (e) => {
-      setLastContextMouse(e.clientX, e.clientY);
-    },
+    (e) => setLastContextMouse(e.clientX, e.clientY),
     true
   );
 
-  // Escape key to close popup
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") removePopup();
   });
 
-  // DOM-level hotkey handling for Playwright tests (capture phase)
+  // DOM-level hotkeys ONLY in e2e
   document.addEventListener(
     "keydown",
     (e) => {
-      // Only handle when editable element is focused
+      if (!isE2EEnabled()) return;
       if (!isEditableFocused()) return;
 
-      // Ctrl+Shift+1 → polish
       if (e.ctrlKey && e.shiftKey && e.key === "1") {
         e.preventDefault();
         e.stopPropagation();
         chrome.runtime.sendMessage({
           type: "OPEN_CORRECTOR_DOM_HOTKEY",
           command: "polish",
+          __pw_e2e: true,
         });
         return;
       }
-      // Ctrl+Shift+2 → to_en
+
       if (e.ctrlKey && e.shiftKey && e.key === "2") {
         e.preventDefault();
         e.stopPropagation();
         chrome.runtime.sendMessage({
           type: "OPEN_CORRECTOR_DOM_HOTKEY",
           command: "to_en",
+          __pw_e2e: true,
         });
-        return;
       }
     },
-    true // capture phase
+    true
   );
 
-  // E2E test bridge: page -> content -> background
+  // window.postMessage bridge ONLY in e2e + localhost
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
+    if (!isE2EEnabled()) return;
+    if (!isLocalhost()) return;
+
     const msg = event.data;
+    if (msg?.type !== "__E2E_CONTEXT_MENU_CLICK__") return;
 
-    // Only allow on localhost/127.0.0.1 for security
-    if (
-      !location.hostname.startsWith("127.0.0.1") &&
-      location.hostname !== "localhost"
-    )
-      return;
-
-    if (msg?.type === "__E2E_CONTEXT_MENU_CLICK__") {
-      try {
-        chrome.runtime.sendMessage(
-          {
-            type: "__TEST_CONTEXT_MENU_CLICK__",
-            selectionText: msg.selectionText || "",
-            frameId: msg.frameId,
-          },
-          (resp) => {
-            window.postMessage(
-              { type: "__E2E_CONTEXT_MENU_CLICK_RESULT__", resp },
-              "*"
-            );
-          }
-        );
-      } catch (e) {
+    chrome.runtime.sendMessage(
+      {
+        type: "__TEST_CONTEXT_MENU_CLICK__",
+        selectionText: msg.selectionText || "",
+        frameId: typeof msg.frameId === "number" ? msg.frameId : undefined,
+        __pw_e2e: true,
+      },
+      (resp) => {
         window.postMessage(
-          {
-            type: "__E2E_CONTEXT_MENU_CLICK_RESULT__",
-            resp: { ok: false, error: String(e) },
-          },
+          { type: "__E2E_CONTEXT_MENU_CLICK_RESULT__", resp },
           "*"
         );
       }
-    }
+    );
   });
 
   // Click outside popup to close
@@ -108,23 +98,22 @@ export const setupEventListeners = () => {
     true
   );
 
-  // Chrome runtime message listener
+  // Chrome runtime message listener (prod path)
   chrome.runtime.onMessage.addListener(async (msg) => {
     if (msg?.type === "OPEN_CORRECTOR") {
       const text =
         msg.selectionText || (window.getSelection?.().toString() ?? "");
       await createPopup(text);
     }
+
     if (msg?.type === "OPEN_CORRECTOR_HOTKEY") {
       if (!document.hasFocus()) return;
 
-      // Prefer selection from focused editable element (textarea/input/contenteditable)
       const active = document.activeElement;
 
       let text = "";
       let source = { kind: "dom-selection" };
 
-      // textarea / input
       if (
         active instanceof HTMLTextAreaElement ||
         (active instanceof HTMLInputElement &&
@@ -137,18 +126,12 @@ export const setupEventListeners = () => {
         text = active.value.slice(start, end);
         source = { kind: "text-input", start, end };
       } else {
-        // fallback: normal page selection
         text = window.getSelection?.().toString() ?? "";
-        source = { kind: "dom-selection" };
       }
 
       if (!text.trim()) return;
 
-      directCorrectText({
-        command: msg.command,
-        text,
-        source,
-      });
+      directCorrectText({ command: msg.command, text, source });
     }
   });
 };

@@ -4,53 +4,6 @@ import http from "node:http";
 let pageServer;
 let baseUrl;
 
-async function waitForNotification(page, { timeout = 5000, type } = {}) {
-  return page.evaluate(
-    ({ timeout, type }) => {
-      return new Promise((resolve, reject) => {
-        const read = () => {
-          const host = document.querySelector("#corrector-notification");
-          if (!host) return null;
-
-          if (type && !host.classList.contains(type)) return null;
-
-          const text = host.shadowRoot?.textContent?.trim() || "";
-          if (!text) return null;
-
-          return { text, type: [...host.classList] };
-        };
-
-        const existing = read();
-        if (existing) return resolve(existing);
-
-        const obs = new MutationObserver(() => {
-          const found = read();
-          if (found) {
-            cleanup();
-            resolve(found);
-          }
-        });
-
-        const cleanup = () => {
-          obs.disconnect();
-          clearTimeout(timer);
-        };
-
-        obs.observe(document.documentElement, {
-          childList: true,
-          subtree: true,
-        });
-
-        const timer = setTimeout(() => {
-          cleanup();
-          reject(new Error("Notification did not appear in time"));
-        }, timeout);
-      });
-    },
-    { timeout, type }
-  );
-}
-
 test.beforeAll(async () => {
   // Page server (textarea host) - specific to this test
   pageServer = http.createServer((req, res) => {
@@ -72,12 +25,11 @@ test.afterAll(async () => {
 test("context menu trigger opens popup with selected text", async ({
   page,
 }) => {
-  // Enable e2e test mode before page loads
-  await page.addInitScript(() => {
-    window.__PW_E2E__ = true;
-  });
-
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+
+  await page.evaluate(() => {
+    document.documentElement.setAttribute("data-pw-e2e", "1");
+  });
 
   page.on("console", (msg) => console.log("PAGE:", msg.type(), msg.text()));
   await page.waitForSelector('html[data-corrector-bound="1"]', {
@@ -167,8 +119,11 @@ test("context menu trigger opens popup with selected text", async ({
     { timeout: 10000 }
   );
 
-  // start waiting for notification BEFORE clicking Apply
   const notificationHost = page.locator("#corrector-notification.success");
+  const notificationVisiblePromise = notificationHost.waitFor({
+    state: "visible",
+    timeout: 10000,
+  });
 
   // click Apply
   await page.evaluate(() => {
@@ -182,8 +137,7 @@ test("context menu trigger opens popup with selected text", async ({
 
   await expect(editor).toHaveValue("Hello, world!", { timeout: 10000 });
 
-  // wait for notification to appear
-  await expect(notificationHost).toBeVisible({ timeout: 10000 });
+  await notificationVisiblePromise;
 
   // verify notification text
   const notifText = await page.evaluate(() => {

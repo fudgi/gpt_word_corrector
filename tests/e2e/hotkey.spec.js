@@ -27,6 +27,10 @@ test("DOM hotkey (Ctrl+Shift+1) polishes selected text in textarea", async ({
 }) => {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
 
+  await page.evaluate(() => {
+    document.documentElement.setAttribute("data-pw-e2e", "1");
+  });
+
   const editor = page.locator("#editor");
   await editor.click();
   await editor.fill("helo world");
@@ -53,6 +57,10 @@ test("DOM hotkey (Ctrl+Shift+2) translates selected text to English in textarea"
   page,
 }) => {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+
+  await page.evaluate(() => {
+    document.documentElement.setAttribute("data-pw-e2e", "1");
+  });
 
   const editor = page.locator("#editor");
   await editor.click();
