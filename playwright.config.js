@@ -9,8 +9,8 @@ export default defineConfig({
   reporter: [["html", { open: "never" }], ["list"]],
   outputDir: "test-results",
 
-  globalSetup: "./tests/e2e/globalSetup.js",
-  globalTeardown: "./tests/e2e/globalTeardown.js",
+  globalSetup: "./tests/setup/globalSetup.js",
+  globalTeardown: "./tests/setup/globalTeardown.js",
 
   use: {
     // Base URL for API tests - mock server is started in globalSetup
