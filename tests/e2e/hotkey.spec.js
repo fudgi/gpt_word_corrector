@@ -78,3 +78,38 @@ test("DOM hotkey (Ctrl+Shift+2) translates selected text to English in textarea"
   const notification = page.locator("#corrector-notification");
   await expect(notification).toBeVisible({ timeout: 5000 });
 });
+
+test("Undo (Ctrl+Z) restores original text after correction", async ({
+  page,
+}) => {
+  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await enableE2E(page);
+
+  const editor = page.locator("#editor");
+  await editor.click();
+
+  const originalText = "helo world";
+
+  // Type text manually (important for undo stack)
+  await editor.pressSequentially(originalText);
+
+  // select entire value
+  await page.evaluate(() => {
+    const el = document.querySelector("#editor");
+    el.focus();
+    el.setSelectionRange(0, el.value.length);
+  });
+
+  // Trigger correction
+  await page.keyboard.press("Control+Shift+1");
+
+  // Wait for correction to apply
+  await expect(editor).toHaveValue("Hello, world!", { timeout: 10000 });
+
+  // Press Ctrl+Z to undo
+  await editor.focus();
+  await page.keyboard.press("Control+z");
+
+  // Original text should be restored
+  await expect(editor).toHaveValue(originalText, { timeout: 5000 });
+});

@@ -1,4 +1,4 @@
-import { sendBg } from "./helpers.js";
+import { sendBg, saveUndoState, initUndoHandler } from "./helpers.js";
 import { getSelectionInfo, applyCorrectedText } from "./textInsertion.js";
 import { showLoadingIndicator, showNotification } from "./ui.js";
 import {
@@ -6,6 +6,9 @@ import {
   successMessageOptions,
   fallbackMessageOptions,
 } from "./constants.js";
+
+// Initialize the global undo handler
+initUndoHandler();
 
 function sendRunGpt(mode, text) {
   return new Promise((resolve) => {
@@ -25,13 +28,24 @@ function applyToActiveTextInput(output, start, end) {
 
   if (!ok) return false;
 
-  const value = el.value;
-  el.value = value.slice(0, start) + output + value.slice(end);
+  // Save state for undo (Cmd+Z / Ctrl+Z)
+  saveUndoState(el, start, end);
 
-  const caret = start + output.length;
-  el.setSelectionRange(caret, caret);
+  el.focus();
+  el.setSelectionRange(start, end);
 
-  el.dispatchEvent(new Event("input", { bubbles: true }));
+  // Try execCommand first (works in Firefox)
+  const success = document.execCommand("insertText", false, output);
+
+  if (!success) {
+    // Fallback: direct value manipulation
+    const value = el.value;
+    el.value = value.slice(0, start) + output + value.slice(end);
+    const caret = start + output.length;
+    el.setSelectionRange(caret, caret);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
   return true;
 }
 

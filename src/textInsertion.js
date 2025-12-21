@@ -1,4 +1,7 @@
-import { getCurrentRange } from "./helpers.js";
+import { getCurrentRange, saveUndoState, initUndoHandler } from "./helpers.js";
+
+// Initialize the global undo handler
+initUndoHandler();
 
 // Centralized event emission for text input
 const emitTextInputEvents = (target, text) => {
@@ -39,11 +42,21 @@ export const applyText = (selectionInfo, text) => {
       el.focus({ preventScroll: true });
       const start = selectionInfo.start ?? el.selectionStart ?? 0;
       const end = selectionInfo.end ?? el.selectionEnd ?? 0;
-      const before = el.value.slice(0, start);
-      const after = el.value.slice(end);
-      el.value = before + text + after;
-      const caret = before.length + text.length;
-      el.setSelectionRange(caret, caret);
+
+      // Save state for custom undo (Cmd+Z / Ctrl+Z)
+      saveUndoState(el, start, end);
+
+      el.setSelectionRange(start, end);
+      const ok = document.execCommand("insertText", false, text);
+
+      if (!ok) {
+        // Fallback: direct value manipulation
+        const before = el.value.slice(0, start);
+        const after = el.value.slice(end);
+        el.value = before + text + after;
+        const caret = before.length + text.length;
+        el.setSelectionRange(caret, caret);
+      }
 
       success = true;
       targetElement = el;
@@ -122,11 +135,22 @@ export const insertIntoInputBySavedSelection = (info, text) => {
   el.focus({ preventScroll: true });
   const start = info.start ?? el.selectionStart ?? 0;
   const end = info.end ?? el.selectionEnd ?? 0;
-  const before = el.value.slice(0, start);
-  const after = el.value.slice(end);
-  el.value = before + text + after;
-  const caret = before.length + text.length;
-  el.setSelectionRange(caret, caret);
+
+  // Save state for custom undo (Cmd+Z / Ctrl+Z)
+  saveUndoState(el, start, end);
+
+  el.setSelectionRange(start, end);
+  const ok = document.execCommand("insertText", false, text);
+
+  if (!ok) {
+    // Fallback: direct value manipulation
+    const before = el.value.slice(0, start);
+    const after = el.value.slice(end);
+    el.value = before + text + after;
+    const caret = before.length + text.length;
+    el.setSelectionRange(caret, caret);
+  }
+
   return true;
 };
 
