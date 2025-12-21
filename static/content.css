@@ -75,6 +75,17 @@
   background: #dc2626;
 }
 
+#corrector-notification.loading {
+  background: #1f1f1f;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#corrector-notification.loading > div {
+  display: inline;
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -96,8 +107,7 @@
   border-radius: 50%;
   border-top-color: #fff;
   animation: spin 1s ease-in-out infinite;
-  margin-left: 8px;
-  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 @keyframes spin {
