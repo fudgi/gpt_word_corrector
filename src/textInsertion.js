@@ -1,7 +1,40 @@
 import { saveUndoState } from "./helpers.js";
 
+const closestContentEditable = (node) => {
+  const el =
+    node && node.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+  if (!el) return null;
+  // Gmail/Notion часто держат фокус на вложенных span/div
+  return el.closest?.('[contenteditable="true"]') || null;
+};
+
+const isRangeProbablyUsable = (range) => {
+  try {
+    const sc = range?.startContainer;
+    const ec = range?.endContainer;
+    return !!(sc && ec && (sc.isConnected ?? true) && (ec.isConnected ?? true));
+  } catch {
+    return false;
+  }
+};
+
+const placeCaretAtEnd = (el) => {
+  try {
+    const sel = window.getSelection?.();
+    if (!sel) return false;
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    r.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 // Centralized event emission for text input
-const emitTextInputEvents = (target, text) => {
+const emitTextInputEvents = (target, text, inputType = "insertText") => {
   if (!target || !target.isConnected) return;
 
   // best-effort beforeinput
@@ -12,7 +45,7 @@ const emitTextInputEvents = (target, text) => {
         bubbles: true,
         cancelable: true,
         composed: true,
-        inputType: "insertText",
+        inputType,
         data: text,
       })
     );
@@ -26,7 +59,7 @@ const emitTextInputEvents = (target, text) => {
         bubbles: true,
         cancelable: false,
         composed: true,
-        inputType: "insertText",
+        inputType,
         data: text,
       })
     );
@@ -66,23 +99,26 @@ export const applyText = (selectionInfo, text) => {
       } catch {
         // some inputs may throw; fallback will handle replacement
       }
+      const beforeValue = el.value ?? "";
       const ok = document.execCommand("insertText", false, text);
+      const afterValue = el.value ?? "";
+      const execReallyWorked = ok && afterValue !== beforeValue;
 
-      if (!ok) {
+      if (!execReallyWorked) {
         // Fallback: direct value manipulation
         const before = value.slice(0, safeStart);
         const after = value.slice(safeEnd);
         el.value = before + text + after;
         const caret = before.length + text.length;
-        el.setSelectionRange(caret, caret);
-        el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
-      } else {
-        // optional: belt-and-suspenders
         try {
-          el.dispatchEvent(
-            new Event("input", { bubbles: true, composed: true })
-          );
+          el.setSelectionRange(caret, caret);
         } catch {}
+        emitTextInputEvents(el, text, "insertReplacementText");
+        // verify the change stuck (best-effort)
+        const expected = before + text + after;
+        if ((el.value ?? "") !== expected) break; // keep success=false
+      } else {
+        // execCommand usually fires proper events; avoid duplicating input
       }
 
       success = true;
@@ -91,15 +127,38 @@ export const applyText = (selectionInfo, text) => {
     }
 
     case "contentEditable": {
-      const el = selectionInfo.element;
+      let el = selectionInfo.element;
       const saved = selectionInfo.range;
-      if (!el || !el.isContentEditable || !saved) break;
+      if ((!el || !el.isConnected) && document.activeElement) {
+        el = closestContentEditable(document.activeElement);
+      }
+      if (!el || !el.isConnected || !saved) break;
 
       el.focus({ preventScroll: true });
-      const sel = window.getSelection();
+      const sel = window.getSelection?.();
+      if (!sel) break;
+
+      // Try to restore the saved range; if it became invalid due to re-render, fallback.
+      let range = null;
+      try {
+        range = saved.cloneRange();
+      } catch {
+        range = null;
+      }
+
       sel.removeAllRanges();
-      const range = saved.cloneRange();
-      sel.addRange(range);
+      if (range && isRangeProbablyUsable(range)) {
+        try {
+          sel.addRange(range);
+        } catch {
+          // fallback below
+        }
+      } else {
+        // Range likely detached; put caret in the CE as a safe fallback
+        placeCaretAtEnd(el);
+        // Re-read the current range (caret) for manual fallback path
+        if (sel.rangeCount) range = sel.getRangeAt(0);
+      }
 
       // Try native method first
       const ok = document.execCommand("insertText", false, text);
@@ -112,6 +171,7 @@ export const applyText = (selectionInfo, text) => {
       }
 
       // Fallback: manual replacement
+      if (!range) break;
       range.deleteContents();
       const node = document.createTextNode(text);
       range.insertNode(node);
@@ -133,7 +193,8 @@ export const applyText = (selectionInfo, text) => {
       const saved = selectionInfo.range;
       if (!saved) break;
 
-      const sel = window.getSelection();
+      const sel = window.getSelection?.();
+      if (!sel) break;
       sel.removeAllRanges();
       const range = saved.cloneRange();
       sel.addRange(range);
@@ -174,7 +235,10 @@ export const applyText = (selectionInfo, text) => {
 
   // Fallback: put in clipboard if insertion failed
   if (!success) {
-    navigator.clipboard.writeText(text);
+    // clipboard может быть недоступен без user gesture/permissions — best-effort
+    try {
+      void navigator.clipboard?.writeText?.(text);
+    } catch {}
   }
 
   return success;
@@ -226,18 +290,24 @@ export const getSelectionInfo = () => {
       start: activeAtOpen.selectionStart ?? 0,
       end: activeAtOpen.selectionEnd ?? 0,
     };
-  } else if (activeAtOpen && activeAtOpen.isContentEditable) {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return null;
-    const range = sel.getRangeAt(0);
-    const frozen = range.cloneRange();
-    return {
-      type: "contentEditable",
-      element: activeAtOpen,
-      range: frozen,
-    };
   } else {
-    const sel = window.getSelection();
+    // Prefer nearest contenteditable ancestor (Gmail/Notion)
+    const ce =
+      closestContentEditable(activeAtOpen) ||
+      closestContentEditable(window.getSelection?.()?.anchorNode);
+    if (ce) {
+      const sel = window.getSelection?.();
+      if (!sel || sel.rangeCount === 0) return null;
+      const range = sel.getRangeAt(0);
+      const frozen = range.cloneRange();
+      return {
+        type: "contentEditable",
+        element: ce,
+        range: frozen,
+      };
+    }
+
+    const sel = window.getSelection?.();
     if (!sel || sel.rangeCount === 0) return null;
     const range = sel.getRangeAt(0);
     const frozen = range.cloneRange();

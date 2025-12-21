@@ -54,6 +54,7 @@ export default async function globalSetup() {
           const lowerText = trimmedText.toLowerCase();
           let output;
           let isSpecialCase = false;
+          let delay = 0;
 
           if (mode === "polish" && lowerText === "helo world") {
             output = "Hello, world!";
@@ -65,12 +66,32 @@ export default async function globalSetup() {
           } else if (mode === "to_en" && lowerText === "bonjour le monde") {
             output = "Hello world";
             isSpecialCase = true;
+          } else if (trimmedText === "AAA") {
+            // Special case: AAA with 300ms delay
+            output = "AAA_CORRECTED";
+            isSpecialCase = true;
+            delay = 300;
+          } else if (trimmedText === "BBB") {
+            // Special case: BBB with 20ms delay
+            output = "BBB_CORRECTED";
+            isSpecialCase = true;
+            delay = 20;
           }
 
-          // Return immediately for special cases (skip cache)
+          // Return with delay for special cases with delay (skip cache)
           if (isSpecialCase) {
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ output, cached: false }));
+            const sendResponse = () => {
+              res.writeHead(200, { "Content-Type": "application/json" });
+              res.end(
+                JSON.stringify({ output, cached: false, delayMs: delay })
+              );
+            };
+
+            if (delay > 0) {
+              setTimeout(sendResponse, delay);
+            } else {
+              sendResponse();
+            }
             return;
           }
 
@@ -79,8 +100,7 @@ export default async function globalSetup() {
             output =
               text.charAt(0).toUpperCase() + text.slice(1) + " (translated)";
           } else {
-            output =
-              text.charAt(0).toUpperCase() + text.slice(1) + " (mocked)";
+            output = text.charAt(0).toUpperCase() + text.slice(1) + " (mocked)";
           }
 
           // Save to cache
@@ -109,4 +129,3 @@ export default async function globalSetup() {
 
   console.log("✅ Mock proxy server started on http://127.0.0.1:8787");
 }
-

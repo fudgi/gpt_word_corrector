@@ -27,6 +27,10 @@ function cancelPending() {
   hideLoadingIndicator();
 }
 
+function isCurrent(requestId) {
+  return requestId === currentRequestId;
+}
+
 function sendRunGpt(mode, text) {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage({ type: "RUN_GPT", mode, text }, (resp) => {
@@ -41,7 +45,6 @@ function sendRunGpt(mode, text) {
 }
 
 export async function directInsertText(payload) {
-  if (!document.hasFocus()) return;
   const { command, text, source } = payload;
 
   if (!text || !text.trim()) return;
@@ -51,9 +54,38 @@ export async function directInsertText(payload) {
   const requestId = currentRequestId;
 
   // IMPORTANT: capture insertion target BEFORE debounce window
-  const activeEl = document.activeElement;
-  const selectionInfoSnapshot =
-    source?.kind === "text-input" ? null : getSelectionInfo();
+  let selectionInfoSnapshot = null;
+  if (source?.kind === "text-input") {
+    const target = document.activeElement;
+    const isTextInput =
+      target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLInputElement &&
+        !["button", "checkbox", "radio", "submit", "file"].includes(
+          target.type
+        ));
+    if (
+      isTextInput &&
+      target.isConnected &&
+      !target.disabled &&
+      !target.readOnly
+    ) {
+      selectionInfoSnapshot = {
+        type: "input",
+        element: target,
+        start: source.start,
+        end: source.end,
+      };
+    }
+  } else {
+    selectionInfoSnapshot = getSelectionInfo();
+  }
+
+  // If we couldn't even snapshot a target/selection, bail early.
+  // This is also a soft replacement for document.hasFocus() in iframe scenarios.
+  if (!selectionInfoSnapshot) return;
+  try {
+    Object.freeze(selectionInfoSnapshot);
+  } catch {}
 
   // Debounce: wait for soft window (200ms) before executing
   // If another request comes in during this window, it will cancel this one
@@ -62,7 +94,7 @@ export async function directInsertText(payload) {
       debounceTimer = null;
 
       // Check if this request is still current
-      if (requestId !== currentRequestId) {
+      if (!isCurrent(requestId)) {
         resolve();
         return;
       }
@@ -71,7 +103,7 @@ export async function directInsertText(payload) {
         // Show loading indicator with delay (prevents flicker on fast responses/cache)
         loadingDelayTimer = setTimeout(() => {
           // Check if request is still current before showing loader
-          if (requestId === currentRequestId) {
+          if (isCurrent(requestId)) {
             showLoadingIndicator("Processing...");
           }
           loadingDelayTimer = null;
@@ -87,7 +119,7 @@ export async function directInsertText(payload) {
         }
 
         // Check again if request is still current (might have been superseded)
-        if (requestId !== currentRequestId) {
+        if (!isCurrent(requestId)) {
           resolve();
           return;
         }
@@ -107,56 +139,23 @@ export async function directInsertText(payload) {
           return;
         }
 
-        // 2) apply result
-        if (source?.kind === "text-input") {
-          // Guard against null/body - fallback to current activeElement if needed
-          const target =
-            !activeEl || activeEl === document.body
-              ? document.activeElement
-              : activeEl;
-          const isTextInput =
-            target instanceof HTMLTextAreaElement ||
-            (target instanceof HTMLInputElement &&
-              !["button", "checkbox", "radio", "submit", "file"].includes(
-                target.type
-              ));
-          if (!target || !isTextInput) {
-            resolve();
-            return;
-          }
-
-          const selectionInfo = {
-            type: "input",
-            element: target,
-            start: source.start,
-            end: source.end,
-          };
-
-          const applied = applyText(selectionInfo, output);
-          if (!applied) {
-            resolve();
-            return;
-          }
-
-          // 3) show notification
-          const successMessage = successMessageOptions[command];
-          showNotification(successMessage, "success");
-          resolve();
-          return;
-        }
-
-        // fallback for dom selection/contenteditable
         const selectionInfo = selectionInfoSnapshot;
         if (!selectionInfo) {
+          // best-effort diagnostics; keep user-noise low
+          try {
+            console.debug("[corrector] no selection snapshot; skip apply");
+          } catch {}
           resolve();
           return;
         }
-        if (!document.hasFocus()) {
-          resolve();
-          return;
-        }
+        // Не блокируем apply по hasFocus: applyText сам восстановит фокус на элемент,
+        // а hasFocus() часто флапает на iframe/SPA.
 
         try {
+          if (!isCurrent(requestId)) {
+            resolve();
+            return;
+          }
           const success = applyText(selectionInfo, output);
 
           if (success) {
@@ -171,7 +170,7 @@ export async function directInsertText(payload) {
         }
       } catch (e) {
         // Only show error if this is still the current request
-        if (requestId === currentRequestId) {
+        if (isCurrent(requestId)) {
           showNotification(`❌ Connection error: ${e.message}`, "error");
         }
       } finally {

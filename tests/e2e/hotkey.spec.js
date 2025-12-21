@@ -141,3 +141,44 @@ test("Only selected word is transformed, rest of text remains unchanged", async 
   const notification = page.locator("#corrector-notification");
   await expect(notification).toBeVisible({ timeout: 5000 });
 });
+
+test("Only latest (BBB) applies; older (AAA) is ignored even if it finishes later", async ({
+  page,
+}) => {
+  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await enableE2E(page);
+
+  const editor = page.locator("#editor");
+  await editor.click();
+  await editor.fill("AAA BBB");
+
+  // Select AAA and trigger
+  await page.evaluate(() => {
+    const el = document.querySelector("#editor");
+    el.focus();
+    el.setSelectionRange(0, 3);
+  });
+  await page.keyboard.press("Control+Shift+1");
+
+  // Wait just enough to ensure AAA debounce passed and request is in-flight.
+  // Instead of a fixed sleep, wait for any observable UI signal if you have one.
+  // If you don't have one, keep a small buffer but don't rely on it for correctness.
+  await page.waitForTimeout(220);
+
+  // Select BBB and trigger
+  await page.evaluate(() => {
+    const el = document.querySelector("#editor");
+    el.focus();
+    el.setSelectionRange(4, 7);
+  });
+  await page.keyboard.press("Control+Shift+1");
+
+  // 1) Wait until BBB applied (this should happen first)
+  await expect(editor).toHaveValue("AAA BBB_CORRECTED", { timeout: 5000 });
+
+  // 2) Now wait longer than AAA remaining worst-case and assert it did NOT overwrite
+  // Debounce(200) + AAA delay(300) + buffers = ~600-800ms
+  await page.waitForTimeout(800);
+
+  await expect(editor).toHaveValue("AAA BBB_CORRECTED");
+});

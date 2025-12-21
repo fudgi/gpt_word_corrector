@@ -65,6 +65,7 @@ export const createPopup = async (initialText) => {
   let style = "formal";
   let originalText = initialText || (window.getSelection?.().toString() ?? "");
   let lastOutput = "";
+  let runId = 0;
 
   // 📌 Save original insertion location
   const selectionInfo = getSelectionInfo();
@@ -104,6 +105,7 @@ export const createPopup = async (initialText) => {
   };
 
   const runLLM = async () => {
+    const myRun = ++runId;
     const status = shadowRoot.querySelector(".status");
     const result = shadowRoot.querySelector(".result");
     const applyBtn = shadowRoot.querySelector('[data-action="apply"]');
@@ -126,6 +128,7 @@ export const createPopup = async (initialText) => {
         text: originalText,
         style,
       });
+      if (myRun !== runId) return; // superseded
 
       if (!resp?.ok) {
         status.textContent = `❌ Error: ${resp?.error || "unknown"}`;
