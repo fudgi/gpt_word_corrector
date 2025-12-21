@@ -1,5 +1,5 @@
 import { sendBg } from "./helpers.js";
-import { getSelectionInfo, applyCorrectedText } from "./textInsertion.js";
+import { getSelectionInfo, applyText } from "./textInsertion.js";
 import { removePopup, getLastContextMouse, showNotification } from "./ui.js";
 import { modeText, successMessageOptions } from "./constants.js";
 
@@ -92,7 +92,7 @@ export const createPopup = async (initialText) => {
     removePopup();
     // give engine one tick to refocus after DOM removal
     setTimeout(() => {
-      applyCorrectedText(selectionInfo, lastOutput);
+      applyText(selectionInfo, lastOutput);
       // show success notification after text is applied
       showNotification(
         successMessageOptions[mode] ?? "✅ Applied",

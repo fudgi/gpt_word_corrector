@@ -1,5 +1,5 @@
 import { createPopup } from "./popup.js";
-import { directCorrectText } from "./directCorrection.js";
+import { directInsertText } from "./directInsertion.js";
 import { removePopup, setLastContextMouse } from "./ui.js";
 
 import { registerE2EBridge, registerE2EDomHotkeys } from "./e2eInfra.js";
@@ -41,11 +41,11 @@ export const setupEventListeners = () => {
   );
 
   // Chrome runtime message listener (prod path)
-  chrome.runtime.onMessage.addListener(async (msg) => {
+  chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type === "OPEN_CORRECTOR") {
       const text =
         msg.selectionText || (window.getSelection?.().toString() ?? "");
-      await createPopup(text);
+      void createPopup(text);
     }
 
     if (msg?.type === "OPEN_CORRECTOR_HOTKEY") {
@@ -73,7 +73,8 @@ export const setupEventListeners = () => {
 
       if (!text.trim()) return;
 
-      directCorrectText({ command: msg.command, text, source });
+      void directInsertText({ command: msg.command, text, source });
     }
+    return false;
   });
 };

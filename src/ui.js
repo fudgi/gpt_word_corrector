@@ -83,6 +83,60 @@ export const showNotification = async (
 };
 
 // Show loading indicator
-export const showLoadingIndicator = async (message = "Processing...") => {
-  await showNotification(message, "loading", 0); // 0 duration means no auto-remove
+const LOADING_ID = "corrector-loading";
+
+export const showLoadingIndicator = (message = "Processing...") => {
+  // Clean up previous loading indicator
+  const prev = document.getElementById(LOADING_ID);
+  if (prev) {
+    clearTimeout(prev.__fadeTimer);
+    clearTimeout(prev.__removeTimer);
+    prev.remove();
+  }
+
+  const ttl = 0; // No auto-remove for loading indicator
+
+  const notificationHost = document.createElement("div");
+  notificationHost.id = LOADING_ID;
+  notificationHost.setAttribute("data-testid", "corrector-loading");
+  notificationHost.classList.add("loading");
+
+  const shadowRoot = notificationHost.attachShadow({ mode: "open" });
+
+  // Put content immediately
+  const notificationContent = document.createElement("div");
+  notificationContent.textContent = message;
+  shadowRoot.appendChild(notificationContent);
+
+  // Position early
+  const x = lastContextMouse.x + window.scrollX + 8;
+  const y = lastContextMouse.y + window.scrollY + 8;
+  Object.assign(notificationHost.style, { left: `${x}px`, top: `${y}px` });
+
+  // Append to DOM BEFORE async CSS load
+  document.body.appendChild(notificationHost);
+
+  // Load styles (async, best-effort)
+  void (async () => {
+    try {
+      const notificationStyles = await loadCSS("src/notification.css");
+      if (notificationStyles) {
+        const style = document.createElement("style");
+        style.textContent = notificationStyles;
+        shadowRoot.prepend(style);
+      }
+    } catch {
+      // ignore
+    }
+  })();
+};
+
+// Hide loading indicator
+export const hideLoadingIndicator = () => {
+  const loading = document.getElementById(LOADING_ID);
+  if (loading) {
+    clearTimeout(loading.__fadeTimer);
+    clearTimeout(loading.__removeTimer);
+    loading.remove();
+  }
 };

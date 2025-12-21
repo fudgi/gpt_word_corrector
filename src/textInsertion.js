@@ -1,29 +1,40 @@
-import { getCurrentRange, saveUndoState, initUndoHandler } from "./helpers.js";
-
-// Initialize the global undo handler
-initUndoHandler();
+import { saveUndoState } from "./helpers.js";
 
 // Centralized event emission for text input
 const emitTextInputEvents = (target, text) => {
+  if (!target || !target.isConnected) return;
+
+  // best-effort beforeinput
+  let allowed = true;
   try {
-    target.dispatchEvent(
+    allowed = target.dispatchEvent(
       new InputEvent("beforeinput", {
         bubbles: true,
         cancelable: true,
+        composed: true,
         inputType: "insertText",
         data: text,
       })
     );
   } catch {}
+  if (!allowed) return;
+
+  // then input
   try {
     target.dispatchEvent(
       new InputEvent("input", {
         bubbles: true,
         cancelable: false,
+        composed: true,
         inputType: "insertText",
         data: text,
       })
     );
+    return;
+  } catch {}
+
+  try {
+    target.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
   } catch {}
 };
 
@@ -33,29 +44,45 @@ export const applyText = (selectionInfo, text) => {
 
   let success = false;
   let targetElement = null;
+  let didManualInsert = false;
 
   switch (selectionInfo.type) {
     case "input": {
       const el = selectionInfo.element;
-      if (!el || el.disabled || el.readOnly) break;
+      if (!el || el.disabled || el.readOnly || !el.isConnected) break;
 
       el.focus({ preventScroll: true });
       const start = selectionInfo.start ?? el.selectionStart ?? 0;
       const end = selectionInfo.end ?? el.selectionEnd ?? 0;
+      const value = el.value ?? "";
+      const safeStart = Math.max(0, Math.min(start, value.length));
+      const safeEnd = Math.max(safeStart, Math.min(end, value.length));
 
       // Save state for custom undo (Cmd+Z / Ctrl+Z)
-      saveUndoState(el, start, end);
+      saveUndoState(el, safeStart, safeEnd);
 
-      el.setSelectionRange(start, end);
+      try {
+        el.setSelectionRange(safeStart, safeEnd);
+      } catch {
+        // some inputs may throw; fallback will handle replacement
+      }
       const ok = document.execCommand("insertText", false, text);
 
       if (!ok) {
         // Fallback: direct value manipulation
-        const before = el.value.slice(0, start);
-        const after = el.value.slice(end);
+        const before = value.slice(0, safeStart);
+        const after = value.slice(safeEnd);
         el.value = before + text + after;
         const caret = before.length + text.length;
         el.setSelectionRange(caret, caret);
+        el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+      } else {
+        // optional: belt-and-suspenders
+        try {
+          el.dispatchEvent(
+            new Event("input", { bubbles: true, composed: true })
+          );
+        } catch {}
       }
 
       success = true;
@@ -79,6 +106,8 @@ export const applyText = (selectionInfo, text) => {
       if (ok) {
         success = true;
         targetElement = el;
+        // native path: do not synthesize events (usually already fired)
+        // optionally keep a flag if you want to differentiate
         break;
       }
 
@@ -95,6 +124,8 @@ export const applyText = (selectionInfo, text) => {
 
       success = true;
       targetElement = el;
+      // mark that we used manual insertion
+      didManualInsert = true;
       break;
     }
 
@@ -107,18 +138,39 @@ export const applyText = (selectionInfo, text) => {
       const range = saved.cloneRange();
       sel.addRange(range);
       range.deleteContents();
-      range.insertNode(document.createTextNode(text));
+      const node = document.createTextNode(text);
+      range.insertNode(node);
+      // Set cursor after insertion
+      sel.removeAllRanges();
+      const after = document.createRange();
+      after.setStartAfter(node);
+      after.collapse(true);
+      sel.addRange(after);
 
       success = true;
-      targetElement = document.activeElement || document.body;
+      targetElement =
+        (range.commonAncestorContainer?.nodeType === Node.ELEMENT_NODE
+          ? range.commonAncestorContainer
+          : range.commonAncestorContainer?.parentElement) ||
+        document.activeElement ||
+        document.body;
+      if (targetElement && targetElement.nodeType !== Node.ELEMENT_NODE) {
+        targetElement = document.activeElement || document.body;
+      }
       break;
     }
   }
 
   // Emit events if insertion was successful
-  if (success && targetElement) {
+  if (
+    success &&
+    selectionInfo.type === "contentEditable" &&
+    targetElement &&
+    didManualInsert
+  ) {
     emitTextInputEvents(targetElement, text);
   }
+  // For "document": skip (or do a simple Event("input") on document)
 
   // Fallback: put in clipboard if insertion failed
   if (!success) {
@@ -129,70 +181,35 @@ export const applyText = (selectionInfo, text) => {
 };
 
 // Legacy functions for backward compatibility
-export const insertIntoInputBySavedSelection = (info, text) => {
-  const el = info?.element;
-  if (!el || el.disabled || el.readOnly) return false;
-  el.focus({ preventScroll: true });
-  const start = info.start ?? el.selectionStart ?? 0;
-  const end = info.end ?? el.selectionEnd ?? 0;
+export const insertIntoInputBySavedSelection = (info, text) =>
+  applyText(
+    {
+      type: "input",
+      element: info?.element,
+      start: info?.start,
+      end: info?.end,
+    },
+    text
+  );
 
-  // Save state for custom undo (Cmd+Z / Ctrl+Z)
-  saveUndoState(el, start, end);
+export const insertIntoContentEditableBySavedRange = (info, text) =>
+  applyText(
+    {
+      type: "contentEditable",
+      element: info?.element,
+      range: info?.range,
+    },
+    text
+  );
 
-  el.setSelectionRange(start, end);
-  const ok = document.execCommand("insertText", false, text);
-
-  if (!ok) {
-    // Fallback: direct value manipulation
-    const before = el.value.slice(0, start);
-    const after = el.value.slice(end);
-    el.value = before + text + after;
-    const caret = before.length + text.length;
-    el.setSelectionRange(caret, caret);
-  }
-
-  return true;
-};
-
-export const insertIntoContentEditableBySavedRange = (info, text) => {
-  const el = info?.element;
-  const saved = info?.range;
-  if (!el || !el.isContentEditable || !saved) return false;
-  el.focus({ preventScroll: true });
-
-  const sel = window.getSelection();
-  sel.removeAllRanges();
-  const range = saved.cloneRange();
-  sel.addRange(range);
-
-  // Try native method
-  const ok = document.execCommand("insertText", false, text);
-  if (ok) return true;
-
-  // Fallback: manual replacement
-  range.deleteContents();
-  const node = document.createTextNode(text);
-  range.insertNode(node);
-  // Set cursor after insertion
-  sel.removeAllRanges();
-  const after = document.createRange();
-  after.setStartAfter(node);
-  after.collapse(true);
-  sel.addRange(after);
-  return true;
-};
-
-export const insertIntoDocumentRange = (info, text) => {
-  const saved = info?.range;
-  if (!saved) return false;
-  const sel = window.getSelection();
-  sel.removeAllRanges();
-  const range = saved.cloneRange();
-  sel.addRange(range);
-  range.deleteContents();
-  range.insertNode(document.createTextNode(text));
-  return true;
-};
+export const insertIntoDocumentRange = (info, text) =>
+  applyText(
+    {
+      type: "document",
+      range: info?.range,
+    },
+    text
+  );
 
 export const getSelectionInfo = () => {
   const activeAtOpen = document.activeElement;
@@ -211,23 +228,21 @@ export const getSelectionInfo = () => {
     };
   } else if (activeAtOpen && activeAtOpen.isContentEditable) {
     const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      return {
-        type: "contentEditable",
-        element: activeAtOpen,
-        range: sel.getRangeAt(0).cloneRange(),
-      };
-    }
+    if (!sel || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    const frozen = range.cloneRange();
+    return {
+      type: "contentEditable",
+      element: activeAtOpen,
+      range: frozen,
+    };
   } else {
-    const r = getCurrentRange();
-    if (r) {
-      return { type: "document", range: r.cloneRange() };
-    }
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    const frozen = range.cloneRange();
+    return { type: "document", range: frozen };
   }
 
   return null;
-};
-
-export const applyCorrectedText = (selectionInfo, correctedText) => {
-  return applyText(selectionInfo, correctedText);
 };
