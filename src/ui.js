@@ -1,3 +1,5 @@
+import { isE2EEnabled } from "./e2eInfra.js";
+
 // Load CSS styles for Shadow DOM
 const loadCSS = async (cssPath) => {
   try {
@@ -36,8 +38,7 @@ export const showNotification = async (
     prev.remove();
   }
 
-  const isE2E = document.documentElement.getAttribute("data-pw-e2e") === "1";
-  const ttl = isE2E ? 8000 : duration;
+  const ttl = isE2EEnabled() ? 8000 : duration;
 
   const notificationHost = document.createElement("div");
   notificationHost.id = "corrector-notification";

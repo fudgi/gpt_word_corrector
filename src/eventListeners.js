@@ -2,6 +2,8 @@ import { createPopup } from "./popup.js";
 import { directCorrectText } from "./directCorrection.js";
 import { removePopup, setLastContextMouse } from "./ui.js";
 
+import { registerE2EBridge, registerE2EDomHotkeys } from "./e2eInfra.js";
+
 function isEditableFocused() {
   const a = document.activeElement;
   return (
@@ -10,14 +12,6 @@ function isEditableFocused() {
       !["button", "checkbox", "radio", "submit", "file"].includes(a.type)) ||
     (a && a.isContentEditable)
   );
-}
-
-function isE2EEnabled() {
-  return document.documentElement.getAttribute("data-pw-e2e") === "1";
-}
-
-function isLocalhost() {
-  return location.hostname === "localhost" || location.hostname === "127.0.0.1";
 }
 
 // Event listeners setup
@@ -32,61 +26,9 @@ export const setupEventListeners = () => {
     if (e.key === "Escape") removePopup();
   });
 
-  // DOM-level hotkeys ONLY in e2e
-  document.addEventListener(
-    "keydown",
-    (e) => {
-      if (!isE2EEnabled()) return;
-      if (!isEditableFocused()) return;
-
-      if (e.ctrlKey && e.shiftKey && e.key === "1") {
-        e.preventDefault();
-        e.stopPropagation();
-        chrome.runtime.sendMessage({
-          type: "OPEN_CORRECTOR_DOM_HOTKEY",
-          command: "polish",
-          __pw_e2e: true,
-        });
-        return;
-      }
-
-      if (e.ctrlKey && e.shiftKey && e.key === "2") {
-        e.preventDefault();
-        e.stopPropagation();
-        chrome.runtime.sendMessage({
-          type: "OPEN_CORRECTOR_DOM_HOTKEY",
-          command: "to_en",
-          __pw_e2e: true,
-        });
-      }
-    },
-    true
-  );
-
-  // window.postMessage bridge ONLY in e2e + localhost
-  window.addEventListener("message", (event) => {
-    if (event.source !== window) return;
-    if (!isE2EEnabled()) return;
-    if (!isLocalhost()) return;
-
-    const msg = event.data;
-    if (msg?.type !== "__E2E_CONTEXT_MENU_CLICK__") return;
-
-    chrome.runtime.sendMessage(
-      {
-        type: "__TEST_CONTEXT_MENU_CLICK__",
-        selectionText: msg.selectionText || "",
-        frameId: typeof msg.frameId === "number" ? msg.frameId : undefined,
-        __pw_e2e: true,
-      },
-      (resp) => {
-        window.postMessage(
-          { type: "__E2E_CONTEXT_MENU_CLICK_RESULT__", resp },
-          "*"
-        );
-      }
-    );
-  });
+  // E2E infra (само внутри себя проверит e2e-flag + localhost где нужно)
+  registerE2EDomHotkeys({ isEditableFocused });
+  registerE2EBridge();
 
   // Click outside popup to close
   document.addEventListener(

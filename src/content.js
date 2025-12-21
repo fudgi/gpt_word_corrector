@@ -8,7 +8,6 @@ if (window.__corrector_bound) {
 window.__corrector_bound = true;
 
 console.log("🔨 Content script loaded");
-document.documentElement.setAttribute("data-corrector-bound", "1");
 
 // Initialize the content script
 setupEventListeners();

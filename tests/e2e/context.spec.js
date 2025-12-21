@@ -1,4 +1,5 @@
 import { test, expect } from "../setup/fixtures";
+import { enableE2E } from "./helpers/enableE2E.js";
 import http from "node:http";
 
 let pageServer;
@@ -26,15 +27,7 @@ test("context menu trigger opens popup with selected text", async ({
   page,
 }) => {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-
-  await page.evaluate(() => {
-    document.documentElement.setAttribute("data-pw-e2e", "1");
-  });
-
-  page.on("console", (msg) => console.log("PAGE:", msg.type(), msg.text()));
-  await page.waitForSelector('html[data-corrector-bound="1"]', {
-    timeout: 10000,
-  });
+  await enableE2E(page);
 
   const editor = page.locator("#editor");
   await editor.click();
@@ -49,10 +42,6 @@ test("context menu trigger opens popup with selected text", async ({
 
   // right click to trigger context menu handler
   await editor.click({ button: "right" });
-
-  await page.waitForSelector('html[data-corrector-bound="1"]', {
-    timeout: 10000,
-  });
 
   const resp = await page.evaluate(() => {
     const el = document.querySelector("#editor");

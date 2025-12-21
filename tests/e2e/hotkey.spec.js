@@ -1,4 +1,5 @@
 import { test, expect } from "../setup/fixtures";
+import { enableE2E } from "./helpers/enableE2E.js";
 import http from "node:http";
 
 let pageServer;
@@ -26,10 +27,7 @@ test("DOM hotkey (Ctrl+Shift+1) polishes selected text in textarea", async ({
   page,
 }) => {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-
-  await page.evaluate(() => {
-    document.documentElement.setAttribute("data-pw-e2e", "1");
-  });
+  await enableE2E(page);
 
   const editor = page.locator("#editor");
   await editor.click();
@@ -57,10 +55,7 @@ test("DOM hotkey (Ctrl+Shift+2) translates selected text to English in textarea"
   page,
 }) => {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-
-  await page.evaluate(() => {
-    document.documentElement.setAttribute("data-pw-e2e", "1");
-  });
+  await enableE2E(page);
 
   const editor = page.locator("#editor");
   await editor.click();
