@@ -113,3 +113,31 @@ test("Undo (Ctrl+Z) restores original text after correction", async ({
   // Original text should be restored
   await expect(editor).toHaveValue(originalText, { timeout: 5000 });
 });
+
+test("Only selected word is transformed, rest of text remains unchanged", async ({
+  page,
+}) => {
+  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await enableE2E(page);
+
+  const editor = page.locator("#editor");
+  await editor.click();
+  await editor.fill("helo world test");
+
+  // Select only the first word "helo" (positions 0-4)
+  await page.evaluate(() => {
+    const el = document.querySelector("#editor");
+    el.focus();
+    el.setSelectionRange(0, 4); // Select "helo"
+  });
+
+  // Trigger DOM-level hotkey for polish mode
+  await page.keyboard.press("Control+Shift+1");
+
+  // Only the selected word should be transformed, rest should remain unchanged
+  await expect(editor).toHaveValue("Hello world test", { timeout: 10000 });
+
+  // Optional: notification appears
+  const notification = page.locator("#corrector-notification");
+  await expect(notification).toBeVisible({ timeout: 5000 });
+});

@@ -50,20 +50,37 @@ export default async function globalSetup() {
           }
 
           // Mock response - deterministic correction for extension tests
+          const trimmedText = text.trim();
+          const lowerText = trimmedText.toLowerCase();
           let output;
-          if (mode === "polish" && text === "helo world") {
+          let isSpecialCase = false;
+
+          if (mode === "polish" && lowerText === "helo world") {
             output = "Hello, world!";
-          } else if (mode === "to_en" && text === "Bonjour le monde") {
+            isSpecialCase = true;
+          } else if (mode === "polish" && lowerText === "helo") {
+            // Handle single word "helo"
+            output = "Hello";
+            isSpecialCase = true;
+          } else if (mode === "to_en" && lowerText === "bonjour le monde") {
             output = "Hello world";
+            isSpecialCase = true;
+          }
+
+          // Return immediately for special cases (skip cache)
+          if (isSpecialCase) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ output, cached: false }));
+            return;
+          }
+
+          // Simple mock transformation for other texts
+          if (mode === "to_en") {
+            output =
+              text.charAt(0).toUpperCase() + text.slice(1) + " (translated)";
           } else {
-            // Simple mock transformation for other texts
-            if (mode === "to_en") {
-              output =
-                text.charAt(0).toUpperCase() + text.slice(1) + " (translated)";
-            } else {
-              output =
-                text.charAt(0).toUpperCase() + text.slice(1) + " (mocked)";
-            }
+            output =
+              text.charAt(0).toUpperCase() + text.slice(1) + " (mocked)";
           }
 
           // Save to cache

@@ -41,7 +41,41 @@ export function createMockProxyServer() {
             return;
           }
 
-          // Check cache
+          // Check for special test cases first (before cache to ensure correct output)
+          const trimmedText = text.trim();
+          const normalizedText = trimmedText.replace(/\s+/g, " ").trim();
+          let isSpecialCase = false;
+          let output;
+
+          // Debug logging (stderr to ensure visibility)
+          process.stderr.write(
+            `[MOCK] mode=${mode}, text="${text}", len=${
+              text.length
+            }, norm="${normalizedText}", lower="${text.toLowerCase()}"\n`
+          );
+
+          // Check exact matches first (most specific) - case insensitive
+          const lowerText = normalizedText.toLowerCase();
+          if (mode === "polish" && lowerText === "helo world") {
+            output = "Hello, world!";
+            isSpecialCase = true;
+          } else if (mode === "polish" && lowerText === "helo") {
+            // Handle single word "helo"
+            output = "Hello";
+            isSpecialCase = true;
+          } else if (mode === "to_en" && lowerText === "bonjour le monde") {
+            output = "Hello world";
+            isSpecialCase = true;
+          }
+
+          // If it's a special case, return immediately (skip cache)
+          if (isSpecialCase) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ output, cached: false }));
+            return;
+          }
+
+          // Check cache for non-special cases
           const cacheKey = `${mode}:${style}:${text}`;
           const cached = cache.get(cacheKey);
           if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -50,21 +84,12 @@ export function createMockProxyServer() {
             return;
           }
 
-          // Mock response - deterministic correction for extension tests
-          let output;
-          if (mode === "polish" && text === "helo world") {
-            output = "Hello, world!";
-          } else if (mode === "to_en" && text === "Bonjour le monde") {
-            output = "Hello world";
+          // Mock response for other texts
+          if (mode === "to_en") {
+            output =
+              text.charAt(0).toUpperCase() + text.slice(1) + " (translated)";
           } else {
-            // Simple mock transformation for other texts
-            if (mode === "to_en") {
-              output =
-                text.charAt(0).toUpperCase() + text.slice(1) + " (translated)";
-            } else {
-              output =
-                text.charAt(0).toUpperCase() + text.slice(1) + " (mocked)";
-            }
+            output = text.charAt(0).toUpperCase() + text.slice(1) + " (mocked)";
           }
 
           // Save to cache
