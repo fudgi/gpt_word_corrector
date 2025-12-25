@@ -1,7 +1,7 @@
-import { sendBg } from "./helpers.js";
-import { getSelectionInfo, applyText } from "./textInsertion.js";
+import { sendBg } from "../utils/helpers.js";
+import { getSelectionInfo, applyText } from "../text/textInsertion.js";
 import { removePopup, getLastContextMouse, showNotification } from "./ui.js";
-import { modeText, successMessageOptions } from "./constants.js";
+import { modeText, successMessageOptions } from "../constants.js";
 
 // Load CSS styles for Shadow DOM
 const loadCSS = async (cssPath) => {
@@ -26,7 +26,7 @@ export const createPopup = async (initialText) => {
   const shadowRoot = shadowHost.attachShadow({ mode: "open" });
 
   // Load and add styles to Shadow DOM
-  const popupStyles = await loadCSS("src/popup.css");
+  const popupStyles = await loadCSS("src/ui/popup.css");
   const styleElement = document.createElement("style");
   styleElement.textContent = popupStyles;
   shadowRoot.appendChild(styleElement);

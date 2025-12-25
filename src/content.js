@@ -1,6 +1,6 @@
 // Main content script entry point
-import { setupEventListeners } from "./eventListeners.js";
-import { initUndoHandler } from "./helpers.js";
+import { setupEventListeners } from "./utils/eventListeners.js";
+import { initUndoHandler } from "./utils/helpers.js";
 
 // Prevent duplicate injection
 if (window.__corrector_bound) {

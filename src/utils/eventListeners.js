@@ -1,6 +1,6 @@
-import { createPopup } from "./popup.js";
-import { directInsertText } from "./directInsertion.js";
-import { removePopup, setLastContextMouse } from "./ui.js";
+import { createPopup } from "../ui/popup.js";
+import { directInsertText } from "../text/directInsertion.js";
+import { removePopup, setLastContextMouse } from "../ui/ui.js";
 
 import { registerE2EBridge, registerE2EDomHotkeys } from "./e2eInfra.js";
 

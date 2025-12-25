@@ -81,14 +81,32 @@ export function copyCssFiles(srcDir, outDir) {
     mkdirSync(srcOutDir, { recursive: true });
   }
 
-  if (statSync(srcDir, { throwIfNoEntry: false })) {
-    readdirSync(srcDir).forEach((file) => {
-      if (file.endsWith(".css")) {
-        copyFileSync(resolve(srcDir, file), resolve(srcOutDir, file));
-        console.log(`✅ Copied CSS file: ${file}`);
+  // Recursively find and copy CSS files preserving directory structure
+  function findAndCopyCss(dir, baseDir, outBaseDir) {
+    if (!statSync(dir, { throwIfNoEntry: false })) return;
+
+    readdirSync(dir).forEach((file) => {
+      const filePath = resolve(dir, file);
+      const stats = statSync(filePath);
+
+      if (stats.isDirectory()) {
+        findAndCopyCss(filePath, baseDir, outBaseDir);
+      } else if (file.endsWith(".css")) {
+        const relativePath = filePath.replace(baseDir + "/", "");
+        const destPath = resolve(outBaseDir, relativePath);
+        const destDir = resolve(destPath, "..");
+
+        if (!statSync(destDir, { throwIfNoEntry: false })) {
+          mkdirSync(destDir, { recursive: true });
+        }
+
+        copyFileSync(filePath, destPath);
+        console.log(`✅ Copied CSS file: ${relativePath}`);
       }
     });
   }
+
+  findAndCopyCss(srcDir, srcDir, srcOutDir);
 }
 
 // Copy single file with background.js processing

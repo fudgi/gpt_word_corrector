@@ -1,4 +1,4 @@
-import { saveUndoState } from "./helpers.js";
+import { saveUndoState } from "../utils/helpers.js";
 
 const closestContentEditable = (node) => {
   const el =

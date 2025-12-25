@@ -1,4 +1,4 @@
-import { isE2EEnabled } from "./e2eInfra.js";
+import { isE2EEnabled } from "../utils/e2eInfra.js";
 
 // Load CSS styles for Shadow DOM
 const loadCSS = async (cssPath) => {
@@ -62,7 +62,7 @@ export const showNotification = async (
 
   // Load styles (async, best-effort)
   try {
-    const notificationStyles = await loadCSS("src/notification.css");
+    const notificationStyles = await loadCSS("src/ui/notification.css");
     if (notificationStyles) {
       const style = document.createElement("style");
       style.textContent = notificationStyles;
@@ -119,7 +119,7 @@ export const showLoadingIndicator = (message = "Processing...") => {
   // Load styles (async, best-effort)
   void (async () => {
     try {
-      const notificationStyles = await loadCSS("src/notification.css");
+      const notificationStyles = await loadCSS("src/ui/notification.css");
       if (notificationStyles) {
         const style = document.createElement("style");
         style.textContent = notificationStyles;

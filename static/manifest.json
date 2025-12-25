@@ -34,7 +34,7 @@
   "action": { "default_title": "Corrector" },
   "web_accessible_resources": [
     {
-      "resources": ["src/popup.css", "src/notification.css"],
+      "resources": ["src/ui/popup.css", "src/ui/notification.css"],
       "matches": ["<all_urls>"]
     }
   ]

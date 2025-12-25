@@ -3,8 +3,8 @@ import {
   showLoadingIndicator,
   hideLoadingIndicator,
   showNotification,
-} from "./ui.js";
-import { successMessageOptions, fallbackMessageOptions } from "./constants.js";
+} from "../ui/ui.js";
+import { successMessageOptions, fallbackMessageOptions } from "../constants.js";
 
 // Debounce/cooldown state
 let currentRequestId = 0;
