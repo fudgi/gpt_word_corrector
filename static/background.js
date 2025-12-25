@@ -1,6 +1,52 @@
 const PROXY_ENDPOINT = "http://localhost:8787/v1/transform";
 
-chrome.runtime.onInstalled.addListener(() => {
+function generateUUID() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback: generate UUID-like string
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// Generate or retrieve install_id
+async function getInstallId() {
+  const result = await chrome.storage.local.get("install_id");
+  if (result.install_id) {
+    return result.install_id;
+  }
+
+  // Generate new install_id
+  const installId = generateUUID();
+  await chrome.storage.local.set({ install_id: installId });
+  return installId;
+}
+
+// Get version from manifest
+function getVersion() {
+  try {
+    return chrome.runtime.getManifest().version || "";
+  } catch {
+    return "";
+  }
+}
+
+// Determine channel based on proxy endpoint
+function getChannel() {
+  const url = PROXY_ENDPOINT.toLowerCase();
+  if (url.includes("localhost") || url.includes("127.0.0.1")) {
+    return "dev";
+  }
+  if (url.includes("test")) {
+    return "test";
+  }
+  return "prod";
+}
+
+chrome.runtime.onInstalled.addListener(async () => {
   try {
     chrome.contextMenus.create({
       id: "correct-with-gpt",
@@ -8,6 +54,9 @@ chrome.runtime.onInstalled.addListener(() => {
       contexts: ["editable"],
     });
   } catch {}
+
+  // Generate install_id on first install
+  await getInstallId();
 });
 
 async function openCorrector(tabId, selectionText = "", frameId) {
@@ -102,9 +151,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case "RUN_GPT": {
       void (async () => {
         try {
+          const installId = await getInstallId();
+          const version = getVersion();
+          const channel = getChannel();
+
+          const headers = {
+            "Content-Type": "application/json",
+            "X-Corrector-Install-Id": installId,
+            "X-Corrector-Version": version,
+            "X-Corrector-Channel": channel,
+          };
+
           const r = await fetch(PROXY_ENDPOINT, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify({
               mode: msg.mode,
               text: msg.text,
