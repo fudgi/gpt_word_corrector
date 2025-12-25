@@ -1,9 +1,17 @@
 import { defineConfig } from "vite";
 import { resolve } from "path";
-import { copyFileSync, mkdirSync, readdirSync, statSync } from "fs";
+import { readdirSync, statSync } from "fs";
+import {
+  getProxyEndpoint,
+  copyStaticFiles,
+  copyCssFiles,
+  copyFileWithProcessing,
+} from "./vite-utils.js";
 
 // Plugin to copy static files and CSS files
-function copyStaticFiles() {
+function copyStaticFilesPlugin() {
+  const proxyEndpoint = getProxyEndpoint();
+
   return {
     name: "copy-static-files",
     buildStart() {
@@ -21,13 +29,12 @@ function copyStaticFiles() {
       if (file.includes("/static/")) {
         const staticDir = resolve(__dirname, "static");
         const outDir = resolve(__dirname, "corrector");
-        const relativePath = file.replace(staticDir + "/", "");
-        const destPath = resolve(outDir, relativePath);
+        const destPath = resolve(outDir, file.replace(staticDir + "/", ""));
 
         try {
-          copyFileSync(file, destPath);
-          console.log(`✅ Updated static file: ${relativePath}`);
+          copyFileWithProcessing(file, destPath, proxyEndpoint, staticDir);
         } catch (e) {
+          const relativePath = file.replace(staticDir + "/", "");
           console.error(`❌ Failed to copy ${relativePath}:`, e);
         }
 
@@ -42,42 +49,8 @@ function copyStaticFiles() {
       const srcDir = resolve(__dirname, "src");
       const outDir = resolve(__dirname, "corrector");
 
-      function copyRecursive(src, dest) {
-        const stats = statSync(src);
-        if (stats.isDirectory()) {
-          if (!statSync(dest, { throwIfNoEntry: false })) {
-            mkdirSync(dest, { recursive: true });
-          }
-          readdirSync(src).forEach((file) => {
-            copyRecursive(resolve(src, file), resolve(dest, file));
-          });
-        } else {
-          copyFileSync(src, dest);
-        }
-      }
-
-      // Copy static files
-      if (statSync(staticDir, { throwIfNoEntry: false })) {
-        readdirSync(staticDir).forEach((file) => {
-          copyRecursive(resolve(staticDir, file), resolve(outDir, file));
-        });
-        console.log("✅ Static files copied");
-      }
-
-      // Copy CSS files from src to src directory in output
-      const srcOutDir = resolve(outDir, "src");
-      if (!statSync(srcOutDir, { throwIfNoEntry: false })) {
-        mkdirSync(srcOutDir, { recursive: true });
-      }
-
-      if (statSync(srcDir, { throwIfNoEntry: false })) {
-        readdirSync(srcDir).forEach((file) => {
-          if (file.endsWith(".css")) {
-            copyFileSync(resolve(srcDir, file), resolve(srcOutDir, file));
-            console.log(`✅ Copied CSS file: ${file}`);
-          }
-        });
-      }
+      copyStaticFiles(staticDir, outDir, proxyEndpoint);
+      copyCssFiles(srcDir, outDir);
     },
   };
 }
@@ -104,5 +77,5 @@ export default defineConfig({
       "@": resolve(__dirname, "src"),
     },
   },
-  plugins: [copyStaticFiles()],
+  plugins: [copyStaticFilesPlugin()],
 });
