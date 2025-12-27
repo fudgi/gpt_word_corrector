@@ -8,6 +8,61 @@ export default async function globalSetup() {
   const cache = new Map();
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+  const errorDefinitions = {
+    RATE_LIMITED: {
+      status: 429,
+      retryable: true,
+      message: "Too many requests",
+    },
+    TIMEOUT: {
+      status: 504,
+      retryable: true,
+      message: "Request timed out",
+    },
+    UPSTREAM_ERROR: {
+      status: 502,
+      retryable: true,
+      message: "Upstream service error",
+    },
+    INVALID_INPUT: {
+      status: 400,
+      retryable: false,
+      message: "Invalid input",
+    },
+    UNAUTHORIZED: {
+      status: 401,
+      retryable: false,
+      message: "Unauthorized",
+    },
+    PAYMENT_REQUIRED: {
+      status: 402,
+      retryable: false,
+      message: "Payment required",
+    },
+    INTERNAL_ERROR: {
+      status: 500,
+      retryable: false,
+      message: "Internal error",
+    },
+  };
+
+  const writeError = (res, code, messageOverride) => {
+    const normalizedCode =
+      errorDefinitions[code] ? code : "INTERNAL_ERROR";
+    const definition =
+      errorDefinitions[normalizedCode] || errorDefinitions.INTERNAL_ERROR;
+    res.writeHead(definition.status, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        error: {
+          code: normalizedCode,
+          message: messageOverride || definition.message,
+          retryable: definition.retryable,
+        },
+      })
+    );
+  };
+
   // Start proxy stub server (matches PROXY_ENDPOINT)
   const proxyServer = http.createServer((req, res) => {
     if (req.method === "POST" && req.url === "/v1/transform") {
@@ -16,27 +71,33 @@ export default async function globalSetup() {
       req.on("end", () => {
         try {
           const parsed = JSON.parse(body || "{}");
-          const { mode = "polish", text = "", style = "neutral" } = parsed;
+          const {
+            mode = "polish",
+            text = "",
+            style = "neutral",
+            test_error,
+          } = parsed;
+
+          const forcedError = req.headers["x-test-error"] || test_error;
+          if (typeof forcedError === "string" && forcedError.length > 0) {
+            writeError(res, forcedError);
+            return;
+          }
 
           // Input validation (same as real server)
           if (!text || typeof text !== "string" || text.trim().length === 0) {
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Text is required" }));
+            writeError(res, "INVALID_INPUT", "Text is required");
             return;
           }
 
           if (text.length > 2000) {
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(
-              JSON.stringify({ error: "Text too long (max 2000 chars)" })
-            );
+            writeError(res, "INVALID_INPUT", "Text too long (max 2000 chars)");
             return;
           }
 
           const validModes = ["polish", "to_en"];
           if (!validModes.includes(mode)) {
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Invalid mode" }));
+            writeError(res, "INVALID_INPUT", "Invalid mode");
             return;
           }
 
@@ -109,8 +170,7 @@ export default async function globalSetup() {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ output, cached: false }));
         } catch (e) {
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: String(e) }));
+          writeError(res, "INTERNAL_ERROR");
         }
       });
       return;
