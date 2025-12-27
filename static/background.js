@@ -172,24 +172,45 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             }),
           });
 
-          if (!r.ok) {
-            const errorData = await r.json().catch(() => ({}));
-            throw new Error(errorData.details || `Server error: ${r.status}`);
+          let payload = null;
+          try {
+            payload = await r.json();
+          } catch {
+            payload = null;
           }
 
-          const data = await r.json();
+          if (!r.ok) {
+            const errorPayload = payload?.error || {};
+            sendResponse({
+              ok: false,
+              error: errorPayload.message || "Unknown error",
+              code: errorPayload.code || "INTERNAL_ERROR",
+              retryable: Boolean(errorPayload.retryable),
+            });
+            return;
+          }
+
+          if (!payload || typeof payload !== "object") {
+            sendResponse({
+              ok: false,
+              error: "Invalid response",
+              code: "INTERNAL_ERROR",
+              retryable: false,
+            });
+            return;
+          }
+
           sendResponse({
             ok: true,
-            output: data.output || "",
-            cached: data.cached || false,
+            output: payload.output || "",
+            cached: payload.cached || false,
           });
         } catch (e) {
           sendResponse({
             ok: false,
-            error: e.message || String(e),
-            retryable:
-              e.message?.includes("Rate limit") ||
-              e.message?.includes("timeout"),
+            error: e?.message || String(e),
+            code: "INTERNAL_ERROR",
+            retryable: false,
           });
         }
       })();
