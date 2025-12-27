@@ -1,4 +1,4 @@
-const PROXY_ENDPOINT = "http://localhost:8787/v1/transform";
+const PROXY_ENDPOINT = __PROXY_ENDPOINT__;
 
 function generateUUID() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {

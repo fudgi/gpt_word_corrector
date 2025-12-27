@@ -32,7 +32,7 @@ function copyStaticFilesPlugin() {
         const destPath = resolve(outDir, file.replace(staticDir + "/", ""));
 
         try {
-          copyFileWithProcessing(file, destPath, proxyEndpoint, staticDir);
+          copyFileWithProcessing(file, destPath, staticDir);
         } catch (e) {
           const relativePath = file.replace(staticDir + "/", "");
           console.error(`❌ Failed to copy ${relativePath}:`, e);
@@ -49,18 +49,22 @@ function copyStaticFilesPlugin() {
       const srcDir = resolve(__dirname, "src");
       const outDir = resolve(__dirname, "corrector");
 
-      copyStaticFiles(staticDir, outDir, proxyEndpoint);
+      copyStaticFiles(staticDir, outDir);
       copyCssFiles(srcDir, outDir);
     },
   };
 }
 
 export default defineConfig({
+  define: {
+    __PROXY_ENDPOINT__: JSON.stringify(getProxyEndpoint()),
+  },
   build: {
     outDir: "corrector",
     emptyOutDir: true, // Clean the directory on each build
     rollupOptions: {
       input: {
+        background: resolve(__dirname, "src/background.js"),
         content: resolve(__dirname, "src/content.js"),
       },
       output: {

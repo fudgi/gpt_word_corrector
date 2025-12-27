@@ -1,12 +1,5 @@
 import { resolve } from "path";
-import {
-  copyFileSync,
-  mkdirSync,
-  readdirSync,
-  statSync,
-  readFileSync,
-  writeFileSync,
-} from "fs";
+import { copyFileSync, mkdirSync, readdirSync, statSync } from "fs";
 
 // Get proxy endpoint from environment variables
 export function getProxyEndpoint() {
@@ -26,49 +19,26 @@ export function getProxyEndpoint() {
   return `${baseUrl}${path}`;
 }
 
-// Process background.js to replace PROXY_ENDPOINT
-export function processBackgroundJs(filePath, proxyEndpoint) {
-  let content = readFileSync(filePath, "utf-8");
-  content = content.replace(
-    /const PROXY_ENDPOINT = ".*?";/,
-    `const PROXY_ENDPOINT = "${proxyEndpoint}";`
-  );
-  return content;
-}
-
-// Recursively copy files, processing background.js if needed
-export function copyRecursive(src, dest, proxyEndpoint) {
+// Recursively copy files
+export function copyRecursive(src, dest) {
   const stats = statSync(src);
   if (stats.isDirectory()) {
     if (!statSync(dest, { throwIfNoEntry: false })) {
       mkdirSync(dest, { recursive: true });
     }
     readdirSync(src).forEach((file) => {
-      copyRecursive(resolve(src, file), resolve(dest, file), proxyEndpoint);
+      copyRecursive(resolve(src, file), resolve(dest, file));
     });
   } else {
-    // Process background.js to replace PROXY_ENDPOINT
-    if (src.endsWith("background.js")) {
-      const content = processBackgroundJs(src, proxyEndpoint);
-      writeFileSync(dest, content, "utf-8");
-      console.log(
-        `✅ Processed background.js with PROXY_ENDPOINT=${proxyEndpoint}`
-      );
-    } else {
-      copyFileSync(src, dest);
-    }
+    copyFileSync(src, dest);
   }
 }
 
 // Copy static files to output directory
-export function copyStaticFiles(staticDir, outDir, proxyEndpoint) {
+export function copyStaticFiles(staticDir, outDir) {
   if (statSync(staticDir, { throwIfNoEntry: false })) {
     readdirSync(staticDir).forEach((file) => {
-      copyRecursive(
-        resolve(staticDir, file),
-        resolve(outDir, file),
-        proxyEndpoint
-      );
+      copyRecursive(resolve(staticDir, file), resolve(outDir, file));
     });
     console.log("✅ Static files copied");
   }
@@ -110,17 +80,8 @@ export function copyCssFiles(srcDir, outDir) {
 }
 
 // Copy single file with background.js processing
-export function copyFileWithProcessing(src, dest, proxyEndpoint, staticDir) {
-  if (src.endsWith("background.js")) {
-    const content = processBackgroundJs(src, proxyEndpoint);
-    writeFileSync(dest, content, "utf-8");
-    const relativePath = src.replace(staticDir + "/", "");
-    console.log(
-      `✅ Updated static file: ${relativePath} (with PROXY_ENDPOINT=${proxyEndpoint})`
-    );
-  } else {
-    copyFileSync(src, dest);
-    const relativePath = src.replace(staticDir + "/", "");
-    console.log(`✅ Updated static file: ${relativePath}`);
-  }
+export function copyFileWithProcessing(src, dest, staticDir) {
+  copyFileSync(src, dest);
+  const relativePath = src.replace(staticDir + "/", "");
+  console.log(`✅ Updated static file: ${relativePath}`);
 }
