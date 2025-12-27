@@ -10,7 +10,7 @@ A browser extension that provides AI-powered text correction and translation usi
 - **Smart Insertion**: Automatically replaces text in original location
 - **Caching**: Reduces API calls with built-in caching
 - **Rate Limiting**: Prevents API abuse
-- **Keyboard Shortcuts**: Quick access with Alt+Shift+P/E
+- **Keyboard Shortcuts**: Quick access with Ctrl+Shift+1/2 (Alt+Shift+1/2 on Mac)
 - **Modular Architecture**: Clean, maintainable codebase
 
 ## Project Structure
@@ -136,8 +136,8 @@ word_correctior/
 
 ### Keyboard Shortcuts
 
-- **Alt+Shift+P**: Polish selected text (improve grammar and style)
-- **Alt+Shift+E**: Translate selected text to English
+- **Ctrl+Shift+1** (Windows/Linux) or **Alt+Shift+1** (Mac): Polish selected text (improve grammar and style)
+- **Ctrl+Shift+2** (Windows/Linux) or **Alt+Shift+2** (Mac): Translate selected text to English
 
 Select text and press the hotkey for instant correction without opening the popup interface.
 

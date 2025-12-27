@@ -23,11 +23,11 @@
   ],
   "commands": {
     "polish": {
-      "suggested_key": { "default": "Ctrl+Shift+1" },
+      "suggested_key": { "default": "Ctrl+Shift+1", "mac": "Alt+Shift+1" },
       "description": "Polish selected text"
     },
     "to_en": {
-      "suggested_key": { "default": "Ctrl+Shift+2" },
+      "suggested_key": { "default": "Ctrl+Shift+2", "mac": "Alt+Shift+2" },
       "description": "Translate selected text to English"
     }
   },
