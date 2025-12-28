@@ -3,6 +3,7 @@ import { requestIdMiddleware } from "./middleware/requestId.js";
 import { createGlobalRateLimit } from "./middleware/globalRateLimit.js";
 import { registerRoute } from "./routes/register.js";
 import { transformRoute } from "./routes/transform.js";
+import { healthRoute } from "./routes/health.js";
 import * as errors from "./lib/errors.js";
 import { createAuth } from "./lib/auth.js";
 import { createDb } from "./lib/db.js";
@@ -18,6 +19,8 @@ function createApp() {
   const app = express();
   app.set("trust proxy", 1);
   app.use(express.json());
+
+  app.get("/health", healthRoute);
 
   app.use(requestIdMiddleware);
   app.use(createGlobalRateLimit({ auth, errors }));
