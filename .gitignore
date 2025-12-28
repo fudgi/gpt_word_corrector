@@ -36,3 +36,5 @@ apps/proxy/data/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
+*.sqlite-shm
+/etc/corrector/*
