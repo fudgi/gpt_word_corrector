@@ -4,7 +4,7 @@ import {
   MAX_TEXT_LENGTH,
   VALID_MODES,
   proxyError,
-} from "../../packages/shared-contract/index.js";
+} from "../../apps/shared-contract/index.js";
 
 // Mock proxy server for tests
 // Supports validation like real server, but uses mock responses for extension tests
