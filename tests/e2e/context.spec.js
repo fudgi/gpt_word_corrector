@@ -72,12 +72,12 @@ test("context menu trigger opens popup with selected text", async ({
 
   expect(resp?.ok).toBe(true);
 
-  const popup = page.locator("#corrector-popup");
+  const popup = page.locator('[data-testid="corrector-popup"].ready');
   await expect(popup).toBeVisible({ timeout: 5000 });
 
   // click Polish
   await page.evaluate(() => {
-    const popupEl = document.getElementById("corrector-popup");
+    const popupEl = document.querySelector('[data-testid="corrector-popup"]');
     const btn = popupEl?.shadowRoot?.querySelector(
       'button[data-mode="polish"]'
     );
@@ -88,7 +88,7 @@ test("context menu trigger opens popup with selected text", async ({
   // wait apply enabled
   await page.waitForFunction(
     () => {
-      const popupEl = document.getElementById("corrector-popup");
+      const popupEl = document.querySelector('[data-testid="corrector-popup"]');
       const applyButton = popupEl?.shadowRoot?.querySelector(
         'button[data-action="apply"]'
       );
@@ -100,7 +100,7 @@ test("context menu trigger opens popup with selected text", async ({
   // verify stub result appears in popup
   await page.waitForFunction(
     () => {
-      const popupEl = document.getElementById("corrector-popup");
+      const popupEl = document.querySelector('[data-testid="corrector-popup"]');
       const root = popupEl?.shadowRoot;
       const text = root?.textContent || popupEl?.textContent || "";
       return text.includes("Hello, world!");
@@ -108,7 +108,9 @@ test("context menu trigger opens popup with selected text", async ({
     { timeout: 10000 }
   );
 
-  const notificationHost = page.locator("#corrector-notification.success");
+  const notificationHost = page.locator(
+    '[data-testid="corrector-toast"].success.ready'
+  );
   const notificationVisiblePromise = notificationHost.waitFor({
     state: "visible",
     timeout: 10000,
@@ -116,7 +118,7 @@ test("context menu trigger opens popup with selected text", async ({
 
   // click Apply
   await page.evaluate(() => {
-    const popupEl = document.getElementById("corrector-popup");
+    const popupEl = document.querySelector('[data-testid="corrector-popup"]');
     const btn = popupEl?.shadowRoot?.querySelector(
       'button[data-action="apply"]'
     );
@@ -130,10 +132,91 @@ test("context menu trigger opens popup with selected text", async ({
 
   // verify notification text
   const notifText = await page.evaluate(() => {
-    const host = document.querySelector("#corrector-notification");
+    const host = document.querySelector('[data-testid="corrector-toast"]');
     return host?.shadowRoot?.textContent?.trim() || "";
   });
   expect(notifText).toContain("Text corrected successfully");
+});
+
+test("popup and toast use apple styling classes", async ({ page }) => {
+  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await enableE2E(page);
+
+  const editor = page.locator("#editor");
+  await editor.click();
+  await editor.fill("helo world");
+
+  await page.evaluate(() => {
+    const el = document.querySelector("#editor");
+    el.focus();
+    el.setSelectionRange(0, el.value.length);
+  });
+
+  await editor.click({ button: "right" });
+
+  const resp = await page.evaluate(() => {
+    const el = document.querySelector("#editor");
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const selectionText = el.value.slice(start, end);
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        window.removeEventListener("message", onMsg);
+        reject(new Error("No response from e2e bridge"));
+      }, 3000);
+
+      function onMsg(e) {
+        if (e.data?.type !== "__E2E_CONTEXT_MENU_CLICK_RESULT__") return;
+        clearTimeout(timer);
+        window.removeEventListener("message", onMsg);
+        resolve(e.data.resp);
+      }
+
+      window.addEventListener("message", onMsg);
+      window.postMessage(
+        { type: "__E2E_CONTEXT_MENU_CLICK__", selectionText },
+        "*"
+      );
+    });
+  });
+
+  expect(resp?.ok).toBe(true);
+
+  const popup = page.locator('[data-testid="corrector-popup"].ready');
+  await expect(popup).toBeVisible({ timeout: 5000 });
+  await expect(popup).toHaveClass(/apple/);
+
+  await page.waitForFunction(
+    () => {
+      const popupEl = document.querySelector('[data-testid="corrector-popup"]');
+      const applyButton = popupEl?.shadowRoot?.querySelector(
+        'button[data-action="apply"]'
+      );
+      return !!applyButton && !applyButton.disabled;
+    },
+    { timeout: 10000 }
+  );
+
+  const notificationHost = page.locator(
+    '[data-testid="corrector-toast"].success.ready'
+  );
+  const notificationVisiblePromise = notificationHost.waitFor({
+    state: "visible",
+    timeout: 10000,
+  });
+
+  await page.evaluate(() => {
+    const popupEl = document.querySelector('[data-testid="corrector-popup"]');
+    const btn = popupEl?.shadowRoot?.querySelector(
+      'button[data-action="apply"]'
+    );
+    if (!btn) throw new Error("No apply button");
+    btn.click();
+  });
+
+  await notificationVisiblePromise;
+  await expect(notificationHost).toHaveClass(/apple/);
 });
 
 test("context menu transforms only selected word, rest of text remains unchanged", async ({
@@ -185,12 +268,12 @@ test("context menu transforms only selected word, rest of text remains unchanged
 
   expect(resp?.ok).toBe(true);
 
-  const popup = page.locator("#corrector-popup");
+  const popup = page.locator('[data-testid="corrector-popup"].ready');
   await expect(popup).toBeVisible({ timeout: 5000 });
 
   // click Polish
   await page.evaluate(() => {
-    const popupEl = document.getElementById("corrector-popup");
+    const popupEl = document.querySelector('[data-testid="corrector-popup"]');
     const btn = popupEl?.shadowRoot?.querySelector(
       'button[data-mode="polish"]'
     );
@@ -201,7 +284,7 @@ test("context menu transforms only selected word, rest of text remains unchanged
   // wait apply enabled
   await page.waitForFunction(
     () => {
-      const popupEl = document.getElementById("corrector-popup");
+      const popupEl = document.querySelector('[data-testid="corrector-popup"]');
       const applyButton = popupEl?.shadowRoot?.querySelector(
         'button[data-action="apply"]'
       );
@@ -210,7 +293,9 @@ test("context menu transforms only selected word, rest of text remains unchanged
     { timeout: 10000 }
   );
 
-  const notificationHost = page.locator("#corrector-notification.success");
+  const notificationHost = page.locator(
+    '[data-testid="corrector-toast"].success.ready'
+  );
   const notificationVisiblePromise = notificationHost.waitFor({
     state: "visible",
     timeout: 10000,
@@ -218,7 +303,7 @@ test("context menu transforms only selected word, rest of text remains unchanged
 
   // click Apply
   await page.evaluate(() => {
-    const popupEl = document.getElementById("corrector-popup");
+    const popupEl = document.querySelector('[data-testid="corrector-popup"]');
     const btn = popupEl?.shadowRoot?.querySelector(
       'button[data-action="apply"]'
     );
@@ -233,7 +318,7 @@ test("context menu transforms only selected word, rest of text remains unchanged
 
   // verify notification text
   const notifText = await page.evaluate(() => {
-    const host = document.querySelector("#corrector-notification");
+    const host = document.querySelector('[data-testid="corrector-toast"]');
     return host?.shadowRoot?.textContent?.trim() || "";
   });
   expect(notifText).toContain("Text corrected successfully");

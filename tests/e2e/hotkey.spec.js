@@ -47,7 +47,7 @@ test("DOM hotkey (Ctrl+Shift+1) polishes selected text in textarea", async ({
   await expect(editor).toHaveValue("Hello, world!", { timeout: 10000 });
 
   // Optional: notification appears
-  const notification = page.locator("#corrector-notification");
+  const notification = page.locator('[data-testid="corrector-toast"].ready');
   await expect(notification).toBeVisible({ timeout: 5000 });
 });
 
@@ -75,7 +75,7 @@ test("DOM hotkey (Ctrl+Shift+2) translates selected text to English in textarea"
   await expect(editor).toHaveValue("Hello world", { timeout: 10000 });
 
   // Optional: notification appears
-  const notification = page.locator("#corrector-notification");
+  const notification = page.locator('[data-testid="corrector-toast"].ready');
   await expect(notification).toBeVisible({ timeout: 5000 });
 });
 
@@ -138,7 +138,7 @@ test("Only selected word is transformed, rest of text remains unchanged", async 
   await expect(editor).toHaveValue("Hello world test", { timeout: 10000 });
 
   // Optional: notification appears
-  const notification = page.locator("#corrector-notification");
+  const notification = page.locator('[data-testid="corrector-toast"].ready');
   await expect(notification).toBeVisible({ timeout: 5000 });
 });
 

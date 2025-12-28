@@ -14,6 +14,23 @@ const loadCSS = async (cssPath) => {
   }
 };
 
+const clampToViewport = (host, desiredLeft, desiredTop) => {
+  const padding = 8;
+  const rect = host.getBoundingClientRect();
+  const minLeft = window.scrollX + padding;
+  const minTop = window.scrollY + padding;
+  const maxLeft = window.scrollX + window.innerWidth - rect.width - padding;
+  const maxTop = window.scrollY + window.innerHeight - rect.height - padding;
+
+  const left = Math.min(Math.max(desiredLeft, minLeft), maxLeft);
+  const top = Math.min(Math.max(desiredTop, minTop), maxTop);
+
+  Object.assign(host.style, {
+    left: `${left}px`,
+    top: `${top}px`,
+  });
+};
+
 // Main popup creation and management
 export const createPopup = async (initialText) => {
   removePopup();
@@ -21,45 +38,58 @@ export const createPopup = async (initialText) => {
   // Create Shadow DOM container
   const shadowHost = document.createElement("div");
   shadowHost.id = "corrector-popup";
+  shadowHost.setAttribute("data-testid", "corrector-popup");
+  shadowHost.classList.add("apple", "corrector-popup");
 
   // Create Shadow Root
   const shadowRoot = shadowHost.attachShadow({ mode: "open" });
 
   // Load and add styles to Shadow DOM
-  const popupStyles = await loadCSS("src/ui/popup.css");
+  const popupStyles = await loadCSS("src/ui/apple.css");
   const styleElement = document.createElement("style");
   styleElement.textContent = popupStyles;
   shadowRoot.appendChild(styleElement);
 
   // Create popup content
   const popupContent = document.createElement("div");
+  popupContent.className = "popup";
   popupContent.innerHTML = `
-    <div class="row">
+    <div class="header">
+      <div class="title">Corrector</div>
+      <div class="subtitle" data-testid="corrector-subtitle"></div>
+    </div>
+    <div class="row modes">
       <button data-mode="polish" title="Improve grammar and style">Polish</button>
       <button data-mode="to_en" title="Translate to English">To English</button>
     </div>
-    <div class="status">Selected: ${
-      initialText
-        ? initialText.slice(0, 80) + (initialText.length > 80 ? "…" : "")
-        : "(empty)"
-    }</div>
-    <div class="result" style="display:none;"></div>
+    <div class="status" data-testid="corrector-status"></div>
+    <div class="result" data-testid="corrector-result" hidden></div>
     <div class="actions">
-      <button data-action="apply" disabled>Apply</button>
+      <button data-action="apply" class="primary" disabled>Apply</button>
     </div>
   `;
 
   shadowRoot.appendChild(popupContent);
 
   const lastContextMouse = getLastContextMouse();
+  const desiredLeft = lastContextMouse.x + window.scrollX + 8;
+  const desiredTop = lastContextMouse.y + window.scrollY + 8;
   Object.assign(shadowHost.style, {
     position: "absolute",
-    left: `${lastContextMouse.x + window.scrollX + 8}px`,
-    top: `${lastContextMouse.y + window.scrollY + 8}px`,
+    left: `${desiredLeft}px`,
+    top: `${desiredTop}px`,
     zIndex: 2147483647,
   });
   shadowHost.addEventListener("mousedown", (e) => e.preventDefault());
   document.body.appendChild(shadowHost);
+
+  clampToViewport(shadowHost, desiredLeft, desiredTop);
+  requestAnimationFrame(() => shadowHost.classList.add("ready"));
+
+  const subtitle = shadowRoot.querySelector(".subtitle");
+  subtitle.textContent = initialText
+    ? `${initialText.slice(0, 80)}${initialText.length > 80 ? "…" : ""}`
+    : "(empty)";
 
   let mode = "polish";
   let style = "formal";
@@ -104,6 +134,13 @@ export const createPopup = async (initialText) => {
     }, 0);
   };
 
+  shadowRoot.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    const applyBtn = shadowRoot.querySelector('[data-action="apply"]');
+    if (!applyBtn || applyBtn.disabled) return;
+    applyBtn.click();
+  });
+
   const runLLM = async () => {
     const myRun = ++runId;
     const status = shadowRoot.querySelector(".status");
@@ -112,13 +149,13 @@ export const createPopup = async (initialText) => {
 
     if (!originalText?.trim()) {
       status.textContent = "No text to process";
-      result.style.display = "none";
+      result.hidden = true;
       applyBtn.disabled = true;
       return;
     }
 
     status.textContent = modeText[mode];
-    result.style.display = "none";
+    result.hidden = true;
     applyBtn.disabled = true;
 
     try {
@@ -140,7 +177,7 @@ export const createPopup = async (initialText) => {
       const cacheIndicator = resp.cached ? " (cached)" : "";
       status.textContent = `${successMessageOptions[mode]}${cacheIndicator}`;
       result.textContent = lastOutput;
-      result.style.display = "block";
+      result.hidden = false;
       applyBtn.disabled = !lastOutput;
     } catch (e) {
       status.textContent = `❌ Connection error: ${e.message}`;

@@ -11,6 +11,27 @@ const loadCSS = async (cssPath) => {
   }
 };
 
+const clampToViewport = (host, desiredLeft, desiredTop) => {
+  const padding = 8;
+  const rect = host.getBoundingClientRect();
+  const minLeft = window.scrollX + padding;
+  const minTop = window.scrollY + padding;
+  const maxLeft = window.scrollX + window.innerWidth - rect.width - padding;
+  const maxTop = window.scrollY + window.innerHeight - rect.height - padding;
+
+  const left = Math.min(Math.max(desiredLeft, minLeft), maxLeft);
+  const top = Math.min(Math.max(desiredTop, minTop), maxTop);
+
+  Object.assign(host.style, {
+    left: `${left}px`,
+    top: `${top}px`,
+  });
+};
+
+const markReady = (host) => {
+  requestAnimationFrame(() => host.classList.add("ready"));
+};
+
 // UI and notification functions
 let lastContextMouse = { x: 0, y: 0 };
 
@@ -42,13 +63,14 @@ export const showNotification = async (
 
   const notificationHost = document.createElement("div");
   notificationHost.id = "corrector-notification";
-  notificationHost.setAttribute("data-testid", "corrector-notification");
-  notificationHost.classList.add(type);
+  notificationHost.setAttribute("data-testid", "corrector-toast");
+  notificationHost.classList.add("apple", "corrector-toast", type);
 
   const shadowRoot = notificationHost.attachShadow({ mode: "open" });
 
   // Put content immediately (so tests can see it right away)
   const notificationContent = document.createElement("div");
+  notificationContent.className = "toast-content";
   notificationContent.textContent = message;
   shadowRoot.appendChild(notificationContent);
 
@@ -62,7 +84,7 @@ export const showNotification = async (
 
   // Load styles (async, best-effort)
   try {
-    const notificationStyles = await loadCSS("src/ui/notification.css");
+    const notificationStyles = await loadCSS("src/ui/apple.css");
     if (notificationStyles) {
       const style = document.createElement("style");
       style.textContent = notificationStyles;
@@ -71,6 +93,9 @@ export const showNotification = async (
   } catch {
     // ignore
   }
+
+  clampToViewport(notificationHost, x, y);
+  markReady(notificationHost);
 
   if (ttl > 0) {
     notificationHost.__fadeTimer = setTimeout(() => {
@@ -98,15 +123,18 @@ export const showLoadingIndicator = (message = "Processing...") => {
 
   const notificationHost = document.createElement("div");
   notificationHost.id = LOADING_ID;
-  notificationHost.setAttribute("data-testid", "corrector-loading");
-  notificationHost.classList.add("loading");
+  notificationHost.setAttribute("data-testid", "corrector-loader");
+  notificationHost.classList.add("apple", "corrector-toast", "corrector-loader");
 
   const shadowRoot = notificationHost.attachShadow({ mode: "open" });
 
   // Put content immediately
   const notificationContent = document.createElement("div");
+  notificationContent.className = "toast-content";
   notificationContent.textContent = message;
-  shadowRoot.appendChild(notificationContent);
+  const spinner = document.createElement("span");
+  spinner.className = "loader-spinner";
+  shadowRoot.append(notificationContent, spinner);
 
   // Position early
   const x = lastContextMouse.x + window.scrollX + 8;
@@ -116,10 +144,13 @@ export const showLoadingIndicator = (message = "Processing...") => {
   // Append to DOM BEFORE async CSS load
   document.body.appendChild(notificationHost);
 
+  clampToViewport(notificationHost, x, y);
+  markReady(notificationHost);
+
   // Load styles (async, best-effort)
   void (async () => {
     try {
-      const notificationStyles = await loadCSS("src/ui/notification.css");
+      const notificationStyles = await loadCSS("src/ui/apple.css");
       if (notificationStyles) {
         const style = document.createElement("style");
         style.textContent = notificationStyles;
@@ -129,6 +160,15 @@ export const showLoadingIndicator = (message = "Processing...") => {
       // ignore
     }
   })();
+
+  if (ttl > 0) {
+    notificationHost.__fadeTimer = setTimeout(() => {
+      notificationHost.classList.add("fade-out");
+      notificationHost.__removeTimer = setTimeout(() => {
+        notificationHost.remove();
+      }, 300);
+    }, ttl);
+  }
 };
 
 // Hide loading indicator
