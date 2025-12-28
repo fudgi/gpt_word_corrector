@@ -9,7 +9,8 @@
     "build": "vite build --mode development --config apps/extension/vite.config.js",
     "start": "vite build --watch --config apps/extension/vite.config.js",
     "test": "npm run build:prod && playwright test",
-    "test:ui": "npm run build:prod && playwright test --ui"
+    "test:ui": "npm run build:prod && playwright test --ui",
+    "test:proxy": "node --test apps/proxy/test/**/*.test.js"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
+    "supertest": "^7.1.4",
     "vite": "^5.0.0"
   }
 }
