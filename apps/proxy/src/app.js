@@ -12,8 +12,10 @@ import * as dedupe from "./lib/dedupe.js";
 import * as openai from "./lib/openai.js";
 import * as config from "./config.js";
 
-function createApp() {
-  const db = createDb({ dbPath: config.DB_PATH });
+function createApp({ deps = {}, configOverrides = {} } = {}) {
+  const appConfig = { ...config, ...configOverrides };
+  const openaiClient = deps.openai || openai;
+  const db = createDb({ dbPath: appConfig.DB_PATH });
   const auth = createAuth({ db });
   const app = express();
   app.set("trust proxy", 1);
@@ -25,7 +27,15 @@ function createApp() {
   app.post("/v1/register", registerRoute({ auth, validate, errors }));
   app.post(
     "/v1/transform",
-    transformRoute({ auth, cache, dedupe, openai, validate, errors, config })
+    transformRoute({
+      auth,
+      cache,
+      dedupe,
+      openai: openaiClient,
+      validate,
+      errors,
+      config: appConfig,
+    })
   );
 
   app.use((err, _req, res, _next) => {
