@@ -1,5 +1,5 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import crypto from "node:crypto";
@@ -13,12 +13,20 @@ import {
 dotenv.config(); // Load .env file
 
 const app = express();
+app.set("trust proxy", 1); // Trust proxy headers (for nginx)
 app.use(express.json());
 
+// Request ID middleware for debugging
+app.use((req, res, next) => {
+  const id = req.get("X-Request-Id") || crypto.randomBytes(8).toString("hex");
+
+  res.locals.requestId = id;
+  res.set("X-Request-Id", id);
+  next();
+});
+
 function sendProxyError(res, code, message, status, retryAfterMs = 0) {
-  return res
-    .status(status)
-    .json(proxyError(code, message, retryAfterMs));
+  return res.status(status).json(proxyError(code, message, retryAfterMs));
 }
 
 function getErrorDefinition(code) {
@@ -46,12 +54,19 @@ function sendDefinedError(res, code, messageOverride, retryAfterMs = 0) {
   );
 }
 
+function rateLimitKey(req) {
+  const token = getBearerToken(req);
+  if (token) return `tok:${token}`;
+  return `ip:${ipKeyGenerator(req)}`;
+}
+
 app.use(
   rateLimit({
     windowMs: 60_000,
     max: 60,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: rateLimitKey,
     handler: (req, res) => {
       const retryAfterMs = req.rateLimit?.resetTime
         ? Math.max(req.rateLimit.resetTime.getTime() - Date.now(), 0)
@@ -86,6 +101,12 @@ function isValidUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
   );
+}
+
+function makeCacheKey({ mode, style, text }) {
+  const hash = crypto.createHash("sha256").update(text).digest("hex");
+
+  return `${mode}:${style}:${hash}`;
 }
 
 function issueInstallToken(installId) {
@@ -207,10 +228,16 @@ app.post("/v1/transform", async (req, res) => {
   }
 
   // Check cache
-  const cacheKey = `${mode}:${style}:${text}`;
+  const cacheKey = makeCacheKey({ mode, style, text });
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    console.log(`Cache hit for mode: ${mode}, text length: ${text.length}`);
+    console.log({
+      request_id: res.locals.requestId,
+      install_id: tokenRecord?.installId,
+      mode,
+      len: text.length,
+      cached: true,
+    });
     return res.json({ output: cached.output, cached: true });
   }
 
@@ -236,9 +263,13 @@ app.post("/v1/transform", async (req, res) => {
 
     try {
       const startTime = Date.now();
-      console.log(
-        `Processing request: mode=${mode}, text length=${text.length}`
-      );
+      console.log({
+        request_id: res.locals.requestId,
+        install_id: tokenRecord?.installId,
+        mode,
+        len: text.length,
+        cached: false,
+      });
 
       // Simplified prompts for 2 modes
       const prompts = {
@@ -274,7 +305,11 @@ app.post("/v1/transform", async (req, res) => {
 
       if (!r.ok) {
         const errorText = await r.text();
-        console.error(`OpenAI API error: ${r.status} - ${errorText}`);
+        console.error({
+          request_id: res.locals.requestId,
+          install_id: tokenRecord?.installId,
+          error: `OpenAI API error: ${r.status} - ${errorText}`,
+        });
         let mapped;
         let retryAfterMs = 0;
         switch (r.status) {
@@ -314,11 +349,7 @@ app.post("/v1/transform", async (req, res) => {
         const definition = getErrorDefinition(mapped.code);
         const error = {
           ok: false,
-          error: proxyError(
-            mapped.code,
-            mapped.message,
-            retryAfterMs
-          ).error,
+          error: proxyError(mapped.code, mapped.message, retryAfterMs).error,
           status: definition.status,
         };
         resolvers.forEach((resolve) => resolve(error));
@@ -343,9 +374,13 @@ app.post("/v1/transform", async (req, res) => {
       }
 
       const processingTime = Date.now() - startTime;
-      console.log(`Request completed in ${processingTime}ms`);
+      console.log({
+        request_id: res.locals.requestId,
+        install_id: tokenRecord?.installId,
+        processing_time_ms: processingTime,
+      });
 
-      const result = { ok: true, data: { output } };
+      const result = { ok: true, status: 200, data: { output } };
       resolvers.forEach((resolve) => resolve(result));
     } catch (e) {
       const isTimeout = e?.name === "AbortError";
@@ -366,10 +401,9 @@ app.post("/v1/transform", async (req, res) => {
   });
 
   return requestPromise.then((result) => {
-    if (!result.ok) {
+    if (!result.ok)
       return res.status(result.status).json({ error: result.error });
-    }
-    return res.json(result.data);
+    return res.status(result.status).json(result.data);
   });
 });
 
@@ -380,11 +414,12 @@ app.use((err, _req, res, _next) => {
   return sendDefinedError(res, "INTERNAL");
 });
 
-const PORT = 8787;
+const PORT = process.env.PORT || 8787;
+const PROXY_ENV = process.env.PROXY_ENV || "local";
 
 app
   .listen(PORT, () => {
-    console.log(`Proxy on http://localhost:${PORT}`);
+    console.log(`Proxy on http://localhost:${PORT} (env: ${PROXY_ENV})`);
   })
   .on("error", (err) => {
     if (err.code === "EADDRINUSE") {
