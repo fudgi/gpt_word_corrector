@@ -11,6 +11,7 @@ if (!OPENAI_API_KEY) {
 
 const PORT = process.env.PORT || 8787;
 const PROXY_ENV = process.env.PROXY_ENV || "local";
+const DB_PATH = process.env.DB_PATH || "apps/proxy/data/proxy.sqlite";
 
 const CACHE_TTL = 5 * 60 * 1000;
 const TOKEN_RATE_WINDOW_MS = 60_000;
@@ -21,6 +22,7 @@ export {
   OPENAI_API_KEY,
   PORT,
   PROXY_ENV,
+  DB_PATH,
   CACHE_TTL,
   TOKEN_RATE_WINDOW_MS,
   TOKEN_RATE_MAX,

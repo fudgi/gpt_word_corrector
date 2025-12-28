@@ -10,7 +10,7 @@ function transformRoute({ auth, cache, dedupe, openai, validate, errors, config 
       return errors.sendDefinedError(res, "UNAUTHORIZED");
     }
 
-    const tokenRecord = auth.getTokenRecord(bearerToken);
+    const tokenRecord = auth.getTokenRecordByBearer(bearerToken);
     if (!tokenRecord) {
       return errors.sendDefinedError(res, "UNAUTHORIZED");
     }
@@ -19,7 +19,7 @@ function transformRoute({ auth, cache, dedupe, openai, validate, errors, config 
       return errors.sendDefinedError(res, "BANNED");
     }
 
-    const rateLimit = auth.checkTokenRateLimit(tokenRecord);
+    const rateLimit = auth.checkTokenRateLimit(tokenRecord.tokenHash);
     if (rateLimit.limited) {
       if (rateLimit.retryAfterMs > 0) {
         res.set("Retry-After", Math.ceil(rateLimit.retryAfterMs / 1000));
@@ -32,7 +32,7 @@ function transformRoute({ auth, cache, dedupe, openai, validate, errors, config 
       );
     }
 
-    tokenRecord.lastSeen = Date.now();
+    auth.touch(tokenRecord.installId);
 
     const {
       mode = "polish",
