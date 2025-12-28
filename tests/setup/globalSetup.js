@@ -1,4 +1,10 @@
 import http from "node:http";
+import {
+  ERROR_DEFINITIONS,
+  MAX_TEXT_LENGTH,
+  VALID_MODES,
+  proxyError,
+} from "../../packages/shared-contract/index.js";
 
 // Mock proxy server for tests
 // Supports validation like real server, but uses mock responses for extension tests
@@ -8,51 +14,20 @@ export default async function globalSetup() {
   const cache = new Map();
   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-  const errorDefinitions = {
-    RATE_LIMITED: {
-      status: 429,
-      message: "Too many requests",
-    },
-    UPSTREAM_UNAVAILABLE: {
-      status: 503,
-      message: "Upstream unavailable",
-    },
-    INVALID_REQUEST: {
-      status: 400,
-      message: "Invalid request",
-    },
-    UNAUTHORIZED: {
-      status: 401,
-      message: "Unauthorized",
-    },
-    PAYMENT_REQUIRED: {
-      status: 402,
-      message: "Payment required",
-    },
-    BANNED: {
-      status: 403,
-      message: "Banned",
-    },
-    INTERNAL: {
-      status: 500,
-      message: "Internal error",
-    },
-  };
-
   const writeError = (res, code, messageOverride, retryAfterMs = 0) => {
     const normalizedCode =
-      errorDefinitions[code] ? code : "INTERNAL";
+      ERROR_DEFINITIONS[code] ? code : "INTERNAL";
     const definition =
-      errorDefinitions[normalizedCode] || errorDefinitions.INTERNAL;
+      ERROR_DEFINITIONS[normalizedCode] || ERROR_DEFINITIONS.INTERNAL;
     res.writeHead(definition.status, { "Content-Type": "application/json" });
     res.end(
-      JSON.stringify({
-        error: {
-          code: normalizedCode,
-          message: messageOverride || definition.message,
-          retry_after_ms: retryAfterMs,
-        },
-      })
+      JSON.stringify(
+        proxyError(
+          normalizedCode,
+          messageOverride || definition.message,
+          retryAfterMs
+        )
+      )
     );
   };
 
@@ -123,13 +98,16 @@ export default async function globalSetup() {
             return;
           }
 
-          if (text.length > 2000) {
-            writeError(res, "INVALID_REQUEST", "Text too long (max 2000 chars)");
+          if (text.length > MAX_TEXT_LENGTH) {
+            writeError(
+              res,
+              "INVALID_REQUEST",
+              `Text too long (max ${MAX_TEXT_LENGTH} chars)`
+            );
             return;
           }
 
-          const validModes = ["polish", "to_en"];
-          if (!validModes.includes(mode)) {
+          if (!VALID_MODES.includes(mode)) {
             writeError(res, "INVALID_REQUEST", "Invalid mode");
             return;
           }

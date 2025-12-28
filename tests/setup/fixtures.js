@@ -9,7 +9,10 @@ const __dirname = path.dirname(__filename);
 export const test = base.extend({
   // Override context to use persistent context with extension
   context: async ({}, use) => {
-    const pathToExtension = path.resolve(__dirname, "../../corrector");
+    const pathToExtension = path.resolve(
+      __dirname,
+      "../../apps/extension/corrector"
+    );
 
     const context = await chromium.launchPersistentContext("", {
       headless: false, // Extensions require headed mode
@@ -35,4 +38,3 @@ export const test = base.extend({
 });
 
 export const expect = test.expect;
-
