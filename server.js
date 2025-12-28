@@ -2,6 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
+import crypto from "node:crypto";
 
 dotenv.config(); // Load .env file
 
@@ -9,70 +10,74 @@ const app = express();
 app.use(express.json());
 
 const ERROR_DEFINITIONS = {
-  RATE_LIMITED: {
-    status: 429,
-    retryable: true,
-    message: "Too many requests",
-  },
-  TIMEOUT: {
-    status: 504,
-    retryable: true,
-    message: "Request timed out",
-  },
-  UPSTREAM_ERROR: {
-    status: 502,
-    retryable: true,
-    message: "Upstream service error",
-  },
-  INVALID_INPUT: {
+  INVALID_REQUEST: {
     status: 400,
-    retryable: false,
-    message: "Invalid input",
+    message: "Invalid request",
   },
   UNAUTHORIZED: {
     status: 401,
-    retryable: false,
     message: "Unauthorized",
   },
   PAYMENT_REQUIRED: {
     status: 402,
-    retryable: false,
     message: "Payment required",
   },
-  INTERNAL_ERROR: {
+  BANNED: {
+    status: 403,
+    message: "Banned",
+  },
+  RATE_LIMITED: {
+    status: 429,
+    message: "Too many requests",
+  },
+  UPSTREAM_UNAVAILABLE: {
+    status: 503,
+    message: "Upstream unavailable",
+  },
+  INTERNAL: {
     status: 500,
-    retryable: false,
     message: "Internal error",
   },
 };
 
-function proxyError(code, message, status, retryable) {
+function proxyError(code, message, retryAfterMs = 0) {
   return {
     error: {
       code,
       message,
-      retryable,
+      retry_after_ms: retryAfterMs,
     },
   };
 }
 
-function sendProxyError(res, code, message, status, retryable) {
-  return res.status(status).json(proxyError(code, message, status, retryable));
+function sendProxyError(res, code, message, status, retryAfterMs = 0) {
+  return res
+    .status(status)
+    .json(proxyError(code, message, retryAfterMs));
 }
 
 function getErrorDefinition(code) {
-  return ERROR_DEFINITIONS[code] || ERROR_DEFINITIONS.INTERNAL_ERROR;
+  return ERROR_DEFINITIONS[code] || ERROR_DEFINITIONS.INTERNAL;
 }
 
-function sendDefinedError(res, code, messageOverride) {
-  const normalizedCode = ERROR_DEFINITIONS[code] ? code : "INTERNAL_ERROR";
+function getRetryAfterMs(headerValue) {
+  if (!headerValue) return 0;
+  const seconds = Number(headerValue);
+  if (Number.isNaN(seconds)) {
+    return 0;
+  }
+  return Math.max(0, seconds * 1000);
+}
+
+function sendDefinedError(res, code, messageOverride, retryAfterMs = 0) {
+  const normalizedCode = ERROR_DEFINITIONS[code] ? code : "INTERNAL";
   const definition = getErrorDefinition(normalizedCode);
   return sendProxyError(
     res,
     normalizedCode,
     messageOverride || definition.message,
     definition.status,
-    definition.retryable
+    retryAfterMs
   );
 }
 
@@ -80,7 +85,17 @@ app.use(
   rateLimit({
     windowMs: 60_000,
     max: 60,
-    handler: (_req, res) => sendDefinedError(res, "RATE_LIMITED"),
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+      const retryAfterMs = req.rateLimit?.resetTime
+        ? Math.max(req.rateLimit.resetTime.getTime() - Date.now(), 0)
+        : 0;
+      if (retryAfterMs > 0) {
+        res.set("Retry-After", Math.ceil(retryAfterMs / 1000));
+      }
+      return sendDefinedError(res, "RATE_LIMITED", undefined, retryAfterMs);
+    },
   })
 );
 
@@ -98,7 +113,102 @@ if (!OPENAI_API_KEY) {
   process.exit(1);
 }
 
+const installTokens = new Map();
+const TOKEN_RATE_WINDOW_MS = 60_000;
+const TOKEN_RATE_MAX = 60;
+
+function isValidUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
+function issueInstallToken(installId) {
+  const token = `tok_${crypto.randomBytes(24).toString("hex")}`;
+  installTokens.set(token, {
+    installId,
+    createdAt: Date.now(),
+    lastSeen: Date.now(),
+    banned: false,
+    rateLimit: {
+      remaining: TOKEN_RATE_MAX,
+      resetAt: Date.now() + TOKEN_RATE_WINDOW_MS,
+    },
+  });
+  return token;
+}
+
+function getTokenRecord(token) {
+  return installTokens.get(token);
+}
+
+function checkTokenRateLimit(record) {
+  const now = Date.now();
+  if (now > record.rateLimit.resetAt) {
+    record.rateLimit.resetAt = now + TOKEN_RATE_WINDOW_MS;
+    record.rateLimit.remaining = TOKEN_RATE_MAX;
+  }
+  if (record.rateLimit.remaining <= 0) {
+    return {
+      limited: true,
+      retryAfterMs: record.rateLimit.resetAt - now,
+    };
+  }
+  record.rateLimit.remaining -= 1;
+  return { limited: false, retryAfterMs: 0 };
+}
+
+function getBearerToken(req) {
+  const authHeader = req.get("Authorization") || "";
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : "";
+}
+
+app.post("/v1/register", (req, res) => {
+  const { install_id: installId, version } = req.body || {};
+
+  if (!installId || typeof installId !== "string" || !isValidUuid(installId)) {
+    return sendDefinedError(res, "INVALID_REQUEST", "Invalid install_id");
+  }
+
+  if (version !== undefined && typeof version !== "string") {
+    return sendDefinedError(res, "INVALID_REQUEST", "Invalid version");
+  }
+
+  const token = issueInstallToken(installId);
+  return res.json({ install_token: token });
+});
+
 app.post("/v1/transform", async (req, res) => {
+  const bearerToken = getBearerToken(req);
+  if (!bearerToken) {
+    return sendDefinedError(res, "UNAUTHORIZED");
+  }
+
+  const tokenRecord = getTokenRecord(bearerToken);
+  if (!tokenRecord) {
+    return sendDefinedError(res, "UNAUTHORIZED");
+  }
+
+  if (tokenRecord.banned) {
+    return sendDefinedError(res, "BANNED");
+  }
+
+  const rateLimit = checkTokenRateLimit(tokenRecord);
+  if (rateLimit.limited) {
+    if (rateLimit.retryAfterMs > 0) {
+      res.set("Retry-After", Math.ceil(rateLimit.retryAfterMs / 1000));
+    }
+    return sendDefinedError(
+      res,
+      "RATE_LIMITED",
+      undefined,
+      rateLimit.retryAfterMs
+    );
+  }
+
+  tokenRecord.lastSeen = Date.now();
+
   const {
     mode = "polish",
     text = "",
@@ -116,20 +226,20 @@ app.post("/v1/transform", async (req, res) => {
 
   // Input validation
   if (!text || typeof text !== "string" || text.trim().length === 0) {
-    return sendDefinedError(res, "INVALID_INPUT", "Text is required");
+    return sendDefinedError(res, "INVALID_REQUEST", "Text is required");
   }
 
   if (text.length > 2000) {
     return sendDefinedError(
       res,
-      "INVALID_INPUT",
+      "INVALID_REQUEST",
       "Text too long (max 2000 chars)"
     );
   }
 
   const validModes = ["polish", "to_en"];
   if (!validModes.includes(mode)) {
-    return sendDefinedError(res, "INVALID_INPUT", "Invalid mode");
+    return sendDefinedError(res, "INVALID_REQUEST", "Invalid mode");
   }
 
   // Check cache
@@ -202,15 +312,16 @@ app.post("/v1/transform", async (req, res) => {
         const errorText = await r.text();
         console.error(`OpenAI API error: ${r.status} - ${errorText}`);
         let mapped;
+        let retryAfterMs = 0;
         switch (r.status) {
           case 400:
             mapped = {
-              code: "INVALID_INPUT",
-              message: "Invalid input",
+              code: "INVALID_REQUEST",
+              message: "Invalid request",
             };
             break;
           case 401:
-            mapped = { code: "UNAUTHORIZED", message: "Unauthorized" };
+            mapped = { code: "UPSTREAM_UNAVAILABLE", message: "Upstream down" };
             break;
           case 402:
             mapped = {
@@ -220,13 +331,20 @@ app.post("/v1/transform", async (req, res) => {
             break;
           case 408:
           case 504:
-            mapped = { code: "TIMEOUT", message: "Request timed out" };
+            mapped = {
+              code: "UPSTREAM_UNAVAILABLE",
+              message: "Upstream timeout",
+            };
             break;
           case 429:
             mapped = { code: "RATE_LIMITED", message: "Too many requests" };
+            retryAfterMs = getRetryAfterMs(r.headers.get("retry-after"));
             break;
           default:
-            mapped = { code: "UPSTREAM_ERROR", message: "Upstream service error" };
+            mapped = {
+              code: "UPSTREAM_UNAVAILABLE",
+              message: "Upstream service error",
+            };
             break;
         }
         const definition = getErrorDefinition(mapped.code);
@@ -235,8 +353,7 @@ app.post("/v1/transform", async (req, res) => {
           error: proxyError(
             mapped.code,
             mapped.message,
-            definition.status,
-            definition.retryable
+            retryAfterMs
           ).error,
           status: definition.status,
         };
@@ -268,15 +385,13 @@ app.post("/v1/transform", async (req, res) => {
       resolvers.forEach((resolve) => resolve(result));
     } catch (e) {
       const isTimeout = e?.name === "AbortError";
-      const code = isTimeout ? "TIMEOUT" : "UPSTREAM_ERROR";
+      const code = "UPSTREAM_UNAVAILABLE";
       const definition = getErrorDefinition(code);
       const error = {
         ok: false,
         error: proxyError(
           code,
-          definition.message,
-          definition.status,
-          definition.retryable
+          isTimeout ? "Upstream timeout" : definition.message
         ).error,
         status: definition.status,
       };
@@ -296,9 +411,9 @@ app.post("/v1/transform", async (req, res) => {
 
 app.use((err, _req, res, _next) => {
   if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
-    return sendDefinedError(res, "INVALID_INPUT", "Invalid JSON");
+    return sendDefinedError(res, "INVALID_REQUEST", "Invalid JSON");
   }
-  return sendDefinedError(res, "INTERNAL_ERROR");
+  return sendDefinedError(res, "INTERNAL");
 });
 
 const PORT = 8787;

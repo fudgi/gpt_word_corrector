@@ -11,61 +11,94 @@ export default async function globalSetup() {
   const errorDefinitions = {
     RATE_LIMITED: {
       status: 429,
-      retryable: true,
       message: "Too many requests",
     },
-    TIMEOUT: {
-      status: 504,
-      retryable: true,
-      message: "Request timed out",
+    UPSTREAM_UNAVAILABLE: {
+      status: 503,
+      message: "Upstream unavailable",
     },
-    UPSTREAM_ERROR: {
-      status: 502,
-      retryable: true,
-      message: "Upstream service error",
-    },
-    INVALID_INPUT: {
+    INVALID_REQUEST: {
       status: 400,
-      retryable: false,
-      message: "Invalid input",
+      message: "Invalid request",
     },
     UNAUTHORIZED: {
       status: 401,
-      retryable: false,
       message: "Unauthorized",
     },
     PAYMENT_REQUIRED: {
       status: 402,
-      retryable: false,
       message: "Payment required",
     },
-    INTERNAL_ERROR: {
+    BANNED: {
+      status: 403,
+      message: "Banned",
+    },
+    INTERNAL: {
       status: 500,
-      retryable: false,
       message: "Internal error",
     },
   };
 
-  const writeError = (res, code, messageOverride) => {
+  const writeError = (res, code, messageOverride, retryAfterMs = 0) => {
     const normalizedCode =
-      errorDefinitions[code] ? code : "INTERNAL_ERROR";
+      errorDefinitions[code] ? code : "INTERNAL";
     const definition =
-      errorDefinitions[normalizedCode] || errorDefinitions.INTERNAL_ERROR;
+      errorDefinitions[normalizedCode] || errorDefinitions.INTERNAL;
     res.writeHead(definition.status, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
         error: {
           code: normalizedCode,
           message: messageOverride || definition.message,
-          retryable: definition.retryable,
+          retry_after_ms: retryAfterMs,
         },
       })
     );
   };
 
+  const issuedTokens = new Map();
+  const isValidUuid = (value) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value
+    );
+
   // Start proxy stub server (matches PROXY_ENDPOINT)
   const proxyServer = http.createServer((req, res) => {
+    if (req.method === "POST" && req.url === "/v1/register") {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        try {
+          const parsed = JSON.parse(body || "{}");
+          const { install_id: installId, version } = parsed;
+          if (!installId || typeof installId !== "string" || !isValidUuid(installId)) {
+            writeError(res, "INVALID_REQUEST", "Invalid install_id");
+            return;
+          }
+          if (version !== undefined && typeof version !== "string") {
+            writeError(res, "INVALID_REQUEST", "Invalid version");
+            return;
+          }
+          const token = `tok_${installId}`;
+          issuedTokens.set(token, { installId });
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ install_token: token }));
+        } catch (e) {
+          writeError(res, "INTERNAL");
+        }
+      });
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/v1/transform") {
+      const authHeader = req.headers.authorization || "";
+      const match = authHeader.match(/^Bearer\s+(.+)$/i);
+      const bearerToken = match ? match[1].trim() : "";
+      if (!bearerToken || !issuedTokens.has(bearerToken)) {
+        writeError(res, "UNAUTHORIZED");
+        return;
+      }
+
       let body = "";
       req.on("data", (c) => (body += c));
       req.on("end", () => {
@@ -86,18 +119,18 @@ export default async function globalSetup() {
 
           // Input validation (same as real server)
           if (!text || typeof text !== "string" || text.trim().length === 0) {
-            writeError(res, "INVALID_INPUT", "Text is required");
+            writeError(res, "INVALID_REQUEST", "Text is required");
             return;
           }
 
           if (text.length > 2000) {
-            writeError(res, "INVALID_INPUT", "Text too long (max 2000 chars)");
+            writeError(res, "INVALID_REQUEST", "Text too long (max 2000 chars)");
             return;
           }
 
           const validModes = ["polish", "to_en"];
           if (!validModes.includes(mode)) {
-            writeError(res, "INVALID_INPUT", "Invalid mode");
+            writeError(res, "INVALID_REQUEST", "Invalid mode");
             return;
           }
 
@@ -170,7 +203,7 @@ export default async function globalSetup() {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ output, cached: false }));
         } catch (e) {
-          writeError(res, "INTERNAL_ERROR");
+          writeError(res, "INTERNAL");
         }
       });
       return;
