@@ -39,7 +39,7 @@ The extension follows a modular architecture with clear separation of concerns:
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Express Proxy Server (server.js)                       │
+│  Express Proxy Server (apps/proxy/server.js)            │
 │  ├── Rate Limiting (60 req/min)                        │
 │  ├── Request Deduplication                             │
 │  ├── Caching (5min TTL)                                │
@@ -54,7 +54,7 @@ The extension follows a modular architecture with clear separation of concerns:
 
 ### 2.2 Component Responsibilities
 
-#### Content Script Layer (`src/`)
+#### Content Script Layer (`apps/extension/src/`)
 
 - **content.js**: Main entry point, prevents duplicate injection, initializes undo handler
 - **eventListeners.js**: Manages all event listeners (context menu, keyboard shortcuts, messages)
@@ -66,7 +66,7 @@ The extension follows a modular architecture with clear separation of concerns:
 - **constants.js**: Configuration constants and messages
 - **e2eInfra.js**: E2E testing infrastructure (DOM hotkeys, message bridge)
 
-#### Background Service Worker (`static/background.js`)
+#### Background Service Worker (`apps/extension/src/background.js`)
 
 - Context menu creation and click handling
 - Keyboard shortcut command handling
@@ -76,7 +76,7 @@ The extension follows a modular architecture with clear separation of concerns:
 - Content script injection fallback (if message sending fails)
 - E2E testing message handlers (gated by localhost check)
 
-#### Proxy Server (`server.js`)
+#### Proxy Server (`apps/proxy/server.js`)
 
 - Express.js server with rate limiting
 - Request caching and deduplication
@@ -368,11 +368,11 @@ The extension emits proper input events for compatibility:
 
 **Build Tool**: Vite 5.0.0
 
-**Build Configuration** (`vite.config.js`):
+**Build Configuration** (`apps/extension/vite.config.js`):
 
-- Custom plugin to copy static files to `corrector/` directory
+- Custom plugin to copy static files to `apps/extension/corrector/` directory
 - Bundles source files from `src/` directory
-- Output directory: `corrector/`
+- Output directory: `apps/extension/corrector/`
 
 **Build Scripts**:
 
@@ -637,18 +637,18 @@ The extension includes E2E testing infrastructure using Playwright:
 2. Create `.env` file with `OPENAI_API_KEY`
 3. Build extension: `npm start` (watch mode) or `npm run build`
 4. Start server: `npm run server`
-5. Load extension: Chrome → `chrome://extensions/` → Load unpacked → Select `corrector/` folder
+5. Load extension: Chrome → `chrome://extensions/` → Load unpacked → Select `apps/extension/corrector/` folder
 
 ### 12.2 Production Build
 
 1. Run: `npm run build:prod`
-2. Test extension in `corrector/` directory
-3. Package extension (zip `corrector/` directory)
+2. Test extension in `apps/extension/corrector/` directory
+3. Package extension (zip `apps/extension/corrector/` directory)
 4. Submit to Chrome Web Store (if applicable)
 
 ### 12.3 Server Deployment
 
-- Deploy `server.js` to hosting service (e.g., Heroku, Railway, Vercel)
+- Deploy `apps/proxy/server.js` to hosting service (e.g., Heroku, Railway, Vercel)
 - Set environment variable `OPENAI_API_KEY`
 - Update `PROXY_ENDPOINT` in `background.js` to production URL
 - Rebuild extension with new endpoint
@@ -664,35 +664,36 @@ The extension includes E2E testing infrastructure using Playwright:
 
 ```
 word_correctior/
-├── src/                    # Source code (modular components)
-│   ├── content.js         # Main content script entry point
-│   ├── popup.js           # Popup UI logic and state management
-│   ├── ui.js              # UI components and DOM manipulation
-│   ├── textInsertion.js   # Smart text replacement algorithms
-│   ├── directInsertion.js # Keyboard shortcut handling with debouncing
-│   ├── eventListeners.js  # Event management and delegation
-│   ├── helpers.js         # Utility functions and helpers (undo handler)
-│   ├── constants.js       # Configuration and constants
-│   ├── e2eInfra.js        # E2E testing infrastructure
-│   ├── popup.css          # Popup styling
-│   └── notification.css   # Notification styling
-├── static/                # Static extension files
-│   ├── manifest.json      # Extension configuration
-│   ├── background.js      # Service worker & API communication
-│   ├── content.css        # Content script styling
-│   └── icons/             # Extension icons (16px, 48px, 128px)
-├── corrector/             # Built extension (generated)
-├── server.js              # Express proxy server
-├── vite.config.js         # Build configuration
-├── package.json           # Dependencies & scripts
-├── package-lock.json      # Dependency lock file
-├── playwright.config.js   # Playwright test configuration
-├── tests/                 # Test files
-│   ├── e2e/              # E2E test specifications
-│   └── setup/            # Test setup and fixtures
-├── README.md              # User documentation
-├── spec.md                # This file
-└── LICENSE                # License file
+├── apps/extension/src/         # Source code (modular components)
+│   ├── content.js              # Main content script entry point
+│   ├── background.js           # Background service worker logic
+│   ├── ui/popup.js             # Popup UI logic and state management
+│   ├── ui/ui.js                # UI components and DOM manipulation
+│   ├── text/textInsertion.js   # Smart text replacement algorithms
+│   ├── text/directInsertion.js # Keyboard shortcut handling with debouncing
+│   ├── utils/eventListeners.js # Event management and delegation
+│   ├── utils/helpers.js        # Utility functions and helpers (undo handler)
+│   ├── utils/e2eInfra.js        # E2E testing infrastructure
+│   ├── constants.js            # Configuration and constants
+│   ├── ui/popup.css            # Popup styling
+│   └── ui/notification.css     # Notification styling
+├── apps/extension/static/       # Static extension files
+│   ├── manifest.json           # Extension configuration
+│   ├── content.css             # Content script styling
+│   └── icons/                  # Extension icons (16px, 48px, 128px)
+├── apps/extension/corrector/    # Built extension (generated)
+├── apps/extension/vite.config.js # Build configuration
+├── apps/proxy/server.js         # Express proxy server
+├── apps/shared-contract/        # Shared error/contract helpers
+├── package.json                 # Dependencies & scripts
+├── package-lock.json            # Dependency lock file
+├── playwright.config.js         # Playwright test configuration
+├── tests/                       # Test files
+│   ├── e2e/                     # E2E test specifications
+│   └── setup/                   # Test setup and fixtures
+├── README.md                    # User documentation
+├── spec.md                      # This file
+└── LICENSE                      # License file
 ```
 
 ## 14. Version Information

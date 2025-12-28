@@ -3,52 +3,17 @@ import rateLimit from "express-rate-limit";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import crypto from "node:crypto";
+import {
+  ERROR_DEFINITIONS,
+  MAX_TEXT_LENGTH,
+  VALID_MODES,
+  proxyError,
+} from "../shared-contract/index.js";
 
 dotenv.config(); // Load .env file
 
 const app = express();
 app.use(express.json());
-
-const ERROR_DEFINITIONS = {
-  INVALID_REQUEST: {
-    status: 400,
-    message: "Invalid request",
-  },
-  UNAUTHORIZED: {
-    status: 401,
-    message: "Unauthorized",
-  },
-  PAYMENT_REQUIRED: {
-    status: 402,
-    message: "Payment required",
-  },
-  BANNED: {
-    status: 403,
-    message: "Banned",
-  },
-  RATE_LIMITED: {
-    status: 429,
-    message: "Too many requests",
-  },
-  UPSTREAM_UNAVAILABLE: {
-    status: 503,
-    message: "Upstream unavailable",
-  },
-  INTERNAL: {
-    status: 500,
-    message: "Internal error",
-  },
-};
-
-function proxyError(code, message, retryAfterMs = 0) {
-  return {
-    error: {
-      code,
-      message,
-      retry_after_ms: retryAfterMs,
-    },
-  };
-}
 
 function sendProxyError(res, code, message, status, retryAfterMs = 0) {
   return res
@@ -229,16 +194,15 @@ app.post("/v1/transform", async (req, res) => {
     return sendDefinedError(res, "INVALID_REQUEST", "Text is required");
   }
 
-  if (text.length > 2000) {
+  if (text.length > MAX_TEXT_LENGTH) {
     return sendDefinedError(
       res,
       "INVALID_REQUEST",
-      "Text too long (max 2000 chars)"
+      `Text too long (max ${MAX_TEXT_LENGTH} chars)`
     );
   }
 
-  const validModes = ["polish", "to_en"];
-  if (!validModes.includes(mode)) {
+  if (!VALID_MODES.includes(mode)) {
     return sendDefinedError(res, "INVALID_REQUEST", "Invalid mode");
   }
 

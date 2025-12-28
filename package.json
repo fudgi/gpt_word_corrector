@@ -2,12 +2,12 @@
   "name": "word_correctior",
   "version": "1.0.0",
   "type": "module",
-  "main": "server.js",
+  "main": "apps/proxy/server.js",
   "scripts": {
-    "server": "node server.js",
-    "build:prod": "vite build",
-    "build": "vite build --mode development",
-    "start": "vite build --watch",
+    "server": "node apps/proxy/server.js",
+    "build:prod": "vite build --config apps/extension/vite.config.js",
+    "build": "vite build --mode development --config apps/extension/vite.config.js",
+    "start": "vite build --watch --config apps/extension/vite.config.js",
     "test": "npm run build:prod && playwright test",
     "test:ui": "npm run build:prod && playwright test --ui"
   },

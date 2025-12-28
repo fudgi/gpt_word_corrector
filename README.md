@@ -17,64 +17,64 @@ A browser extension that provides AI-powered text correction and translation usi
 
 ```
 word_correctior/
-├── src/                   # Source code (modular components)
-│   ├── content.js         # Main content script entry point
-│   ├── popup.js           # Popup UI logic
-│   ├── ui.js              # UI components and styling
-│   ├── textInsertion.js   # Smart text replacement
-│   ├── directCorrection.js # Keyboard shortcut handling
-│   ├── eventListeners.js  # Event management
-│   ├── e2eInfra.js        # E2E testing infrastructure (guards, bridges)
-│   ├── helpers.js         # Utility functions
-│   └── constants.js       # Configuration constants
-├── static/                # Static extension files
-│   ├── manifest.json      # Extension configuration
-│   ├── background.js      # Service worker & API communication
-│   ├── content.css        # Popup styling
-│   └── icons/             # Extension icons
+├── apps/extension/src/         # Extension source code (modular components)
+│   ├── content.js              # Main content script entry point
+│   ├── ui/popup.js             # Popup UI logic
+│   ├── ui/ui.js                # UI components and styling
+│   ├── text/textInsertion.js   # Smart text replacement
+│   ├── text/directInsertion.js # Keyboard shortcut handling
+│   ├── utils/eventListeners.js # Event management
+│   ├── utils/e2eInfra.js        # E2E testing infrastructure (guards, bridges)
+│   ├── utils/helpers.js         # Utility functions
+│   └── constants.js            # Configuration constants
+├── apps/extension/static/  # Static extension files
+│   ├── manifest.json       # Extension configuration
+│   ├── content.css         # Popup styling
+│   └── icons/              # Extension icons
 ├── tests/                 # E2E tests (Playwright)
 │   ├── e2e/               # Test specs
 │   │   ├── context.spec.js
 │   │   ├── hotkey.spec.js
 │   │   └── helpers/       # Test helpers
 │   └── setup/             # Test setup & fixtures
-├── corrector/             # Built extension (generated)
-├── server.js              # Express proxy server
-├── vite.config.js         # Build configuration
+├── apps/extension/corrector/   # Built extension (generated)
+├── apps/proxy/server.js        # Express proxy server
+├── apps/extension/vite.config.js # Build configuration
+├── apps/shared-contract/     # Shared constants and error helpers
 ├── playwright.config.js   # E2E test configuration
 └── package.json           # Dependencies & scripts
 ```
 
 ## Components
 
-**Source Code (src/)**
+**Source Code (apps/extension/src/)**
 
 - `content.js`: Main content script entry point
-- `popup.js`: Popup UI logic and state management
-- `ui.js`: UI components and DOM manipulation
-- `textInsertion.js`: Smart text replacement algorithms
-- `directCorrection.js`: Keyboard shortcut handling
-- `eventListeners.js`: Event management and delegation
-- `e2eInfra.js`: E2E testing infrastructure (DOM hotkeys, message bridge)
-- `helpers.js`: Utility functions and helpers
+- `background.js`: Background service worker logic
+- `ui/popup.js`: Popup UI logic and state management
+- `ui/ui.js`: UI components and DOM manipulation
+- `text/textInsertion.js`: Smart text replacement algorithms
+- `text/directInsertion.js`: Keyboard shortcut handling
+- `utils/eventListeners.js`: Event management and delegation
+- `utils/e2eInfra.js`: E2E testing infrastructure (DOM hotkeys, message bridge)
+- `utils/helpers.js`: Utility functions and helpers
 - `constants.js`: Configuration and constants
 
-**Static Files (static/)**
+**Static Files (apps/extension/static/)**
 
 - `manifest.json`: Chrome extension configuration (Manifest V3)
-- `background.js`: Service worker for context menu and API communication
 - `content.css`: Dark theme styling for popup interface
 - `icons/`: Extension icons (16px, 48px, 128px)
 
 **Build System**
 
-- `vite.config.js`: Vite build configuration with custom plugin
-- Automatically copies static files to `corrector/` directory
+- `apps/extension/vite.config.js`: Vite build configuration with custom plugin
+- Automatically copies static files to `apps/extension/corrector/` directory
 - Bundles and optimizes source code for production
 
 **Proxy Server**
 
-- `server.js`: Express server with OpenAI API integration
+- `apps/proxy/server.js`: Express server with OpenAI API integration
 - Rate limiting (60 req/min), caching (5min TTL), request deduplication
 - Registration endpoint: `POST /v1/register` issues an `install_token`
 - Transform endpoint: `POST /v1/transform` requires `Authorization: Bearer <install_token>`
@@ -124,7 +124,7 @@ word_correctior/
 5. **Load Extension**
    - Go to `chrome://extensions/`
    - Enable "Developer mode"
-   - Click "Load unpacked" → select `corrector/` folder
+   - Click "Load unpacked" → select `apps/extension/corrector/` folder
 
 ## Usage
 
@@ -173,7 +173,7 @@ The project uses Vite for building the browser extension:
 
 1. **Source Code**: Located in `src/` directory with modular components
 2. **Static Files**: Extension assets in `static/` directory
-3. **Build Output**: Generated `corrector/` directory contains the complete extension
+3. **Build Output**: Generated `apps/extension/corrector/` directory contains the complete extension
 4. **Watch Mode**: `npm start` rebuilds automatically on file changes
 
 ### File Organization
