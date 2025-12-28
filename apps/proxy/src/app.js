@@ -4,7 +4,8 @@ import { createGlobalRateLimit } from "./middleware/globalRateLimit.js";
 import { registerRoute } from "./routes/register.js";
 import { transformRoute } from "./routes/transform.js";
 import * as errors from "./lib/errors.js";
-import * as auth from "./lib/auth.js";
+import { createAuth } from "./lib/auth.js";
+import { createDb } from "./lib/db.js";
 import * as validate from "./lib/validate.js";
 import * as cache from "./lib/cache.js";
 import * as dedupe from "./lib/dedupe.js";
@@ -12,6 +13,8 @@ import * as openai from "./lib/openai.js";
 import * as config from "./config.js";
 
 function createApp() {
+  const db = createDb({ dbPath: config.DB_PATH });
+  const auth = createAuth({ db });
   const app = express();
   app.set("trust proxy", 1);
   app.use(express.json());

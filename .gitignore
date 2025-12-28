@@ -31,3 +31,8 @@ dist/
 playwright-report/
 tmp-playwright-profile/
 test-results/
+
+apps/proxy/data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
