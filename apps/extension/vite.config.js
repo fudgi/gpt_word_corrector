@@ -60,7 +60,7 @@ export default defineConfig({
     __PROXY_ENDPOINT__: JSON.stringify(getProxyEndpoint()),
   },
   build: {
-    outDir: "corrector",
+    outDir: resolve(__dirname, "corrector"),
     emptyOutDir: true, // Clean the directory on each build
     rollupOptions: {
       input: {
