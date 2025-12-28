@@ -3,8 +3,8 @@ import { PORT, PROXY_ENV } from "./config.js";
 
 const app = createApp();
 
-const server = app.listen(PORT, () => {
-  console.log(`Proxy on http://localhost:${PORT} (env: ${PROXY_ENV})`);
+app.listen(PORT, "127.0.0.1", () => {
+  console.log(`Proxy on http://127.0.0.1:${PORT}`);
 });
 
 server.on("error", (err) => {
