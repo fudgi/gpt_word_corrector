@@ -616,7 +616,7 @@ The extension includes E2E testing infrastructure using Playwright:
 
 ### 11.1 Planned Features
 
-- **API Keys & Limits**: Enhanced authentication and per-user rate limiting
+- **API Keys & Limits**: Paid access controls and per-user rate limiting
 - **Message Logging**: Database storage for all correction requests
 - **Custom Prompts**: User-defined correction templates
 - **Language Support**: Additional translation languages beyond English
@@ -652,6 +652,13 @@ The extension includes E2E testing infrastructure using Playwright:
 - Set environment variable `OPENAI_API_KEY`
 - Update `PROXY_ENDPOINT` in `background.js` to production URL
 - Rebuild extension with new endpoint
+
+### 12.4 Authorization Flow
+
+- The extension registers on first use via `POST /v1/register` with `{ install_id, version }`
+- The server responds with `{ install_token }`
+- All `POST /v1/transform` requests require `Authorization: Bearer <install_token>`
+- Error responses use `{ "error": { "code", "message", "retry_after_ms" } }`
 
 ## 13. File Structure
 

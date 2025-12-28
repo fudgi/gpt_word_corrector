@@ -76,7 +76,8 @@ word_correctior/
 
 - `server.js`: Express server with OpenAI API integration
 - Rate limiting (60 req/min), caching (5min TTL), request deduplication
-- Endpoint: `POST /v1/transform` with modes: `polish`, `to_en`
+- Registration endpoint: `POST /v1/register` issues an `install_token`
+- Transform endpoint: `POST /v1/transform` requires `Authorization: Bearer <install_token>`
 
 **E2E Testing (tests/)**
 
@@ -140,6 +141,12 @@ word_correctior/
 - **Ctrl+Shift+2** (Windows/Linux) or **Alt+Shift+2** (Mac): Translate selected text to English
 
 Select text and press the hotkey for instant correction without opening the popup interface.
+
+## API Authorization
+
+The extension registers its installation on first use to obtain an `install_token`.
+Requests to `/v1/transform` include `Authorization: Bearer <install_token>` and the
+proxy uses that token to enforce rate limits or bans.
 
 ## Dependencies
 

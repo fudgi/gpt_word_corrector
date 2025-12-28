@@ -125,8 +125,9 @@ export async function directInsertText(payload) {
         }
 
         if (!resp?.ok) {
+          const message = resp?.error?.message || resp?.error || "Unknown error";
           showNotification(
-            `❌ Correction failed: ${resp?.error || "Unknown error"}`,
+            `❌ Correction failed: ${message}`,
             "error"
           );
           resolve();

@@ -131,7 +131,8 @@ export const createPopup = async (initialText) => {
       if (myRun !== runId) return; // superseded
 
       if (!resp?.ok) {
-        status.textContent = `❌ Error: ${resp?.error || "unknown"}`;
+        const message = resp?.error?.message || resp?.error || "unknown";
+        status.textContent = `❌ Error: ${message}`;
         return;
       }
 
