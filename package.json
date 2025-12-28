@@ -10,7 +10,7 @@
     "start": "vite build --watch --config apps/extension/vite.config.js",
     "test": "npm run build:prod && playwright test",
     "test:ui": "npm run build:prod && playwright test --ui",
-    "test:proxy": "node --test apps/proxy/test"
+    "test:proxy": "node --test apps/proxy/test/**/*.test.js"
   },
   "keywords": [],
   "author": "",
